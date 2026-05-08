@@ -140,8 +140,20 @@
                       readonly
                       outlined
                       dark
-                      suffix="satoshis"
                       class="col"
+                    />
+                    <q-select
+                      v-model="balanceUnit"
+                      :options="balanceUnitOptions"
+                      option-value="value"
+                      option-label="label"
+                      emit-value
+                      map-options
+                      dense
+                      outlined
+                      dark
+                      style="min-width: 100px"
+                      class="unit-selector"
                     />
                     <q-btn
                       flat
@@ -342,6 +354,12 @@ export default defineComponent({
       balanceRefreshing: false,
       showQRCode: false, // ✅ QR code hidden by default until user clicks button
       depositPollTimeout: null, // Track rapid polling timeout for cleanup
+      balanceUnit: 'sats', // Unit for balance display: 'sats', 'mBCH', 'BCH'
+      balanceUnitOptions: [
+        { label: 'sats', value: 'sats' },
+        { label: 'mBCH', value: 'mBCH' },
+        { label: 'BCH', value: 'BCH' },
+      ],
     }
   },
 
@@ -361,7 +379,8 @@ export default defineComponent({
 
     displayBalance() {
       if (!this.vault) return 0
-      return this.vault.balance
+      // Reference balanceUnit so computed property updates when unit changes
+      return this.balanceUnit ? this.vault.balance : this.vault.balance
     },
 
     walletAddress() {
@@ -843,7 +862,18 @@ export default defineComponent({
 
     formatBalance(satoshis) {
       if (!satoshis) return '0'
-      return satoshis.toString()
+
+      const sats = Number(satoshis)
+
+      switch (this.balanceUnit) {
+        case 'BCH':
+          return (sats / 100000000).toFixed(8)
+        case 'mBCH':
+          return (sats / 100000).toFixed(5)
+        case 'sats':
+        default:
+          return sats.toLocaleString()
+      }
     },
   },
 })
@@ -863,5 +893,14 @@ export default defineComponent({
 .q-btn.color-primary {
   background-color: #00d588 !important;
   color: #000 !important;
+}
+
+/* Unit selector styling */
+.unit-selector ::v-deep(.q-field__control) {
+  padding: 0 8px;
+}
+
+.unit-selector ::v-deep(.q-field__native) {
+  font-weight: 500;
 }
 </style>

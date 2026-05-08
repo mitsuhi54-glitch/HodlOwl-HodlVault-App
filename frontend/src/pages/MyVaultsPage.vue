@@ -15,36 +15,6 @@
             <p :class="$q.dark.isActive ? 'text-grey-6' : 'text-grey-7'" q-mb-lg>
               Manage all your BCH HODL vaults in one place
             </p>
-
-            <!-- Connected Wallet Info -->
-            <q-card
-              flat
-              bordered
-              class="q-pa-md inline-block"
-              :class="$q.dark.isActive ? 'bg-grey-9' : 'bg-grey-1'"
-            >
-              <div
-                class="text-subtitle2"
-                :class="$q.dark.isActive ? 'text-grey-4' : 'text-grey-7'"
-                q-mb-sm
-              >
-                Connected Wallet
-              </div>
-              <div class="text-body2 text-primary">
-                {{ connectedAddress || 'Not Connected' }}
-              </div>
-            </q-card>
-
-            <!-- Activity History Button -->
-            <div class="q-mt-md">
-              <q-btn
-                flat
-                color="primary"
-                icon="history"
-                label="Activity History"
-                @click="showActivityHistory = true"
-              />
-            </div>
           </div>
 
           <!-- Vault List -->
@@ -127,7 +97,7 @@
                       <div class="col-auto">
                         <div class="text-grey-5">Balance</div>
                         <div class="text-white text-weight-medium">
-                          {{ formatBalance(vault.balance) }} satoshis
+                          {{ formatBalance(vault.balance) }} {{ balanceUnit }}
                         </div>
                       </div>
 
@@ -193,7 +163,7 @@
           </div>
 
           <!-- Summary Stats -->
-          <div v-if="vaults.length > 0" class="q-mt-xl">
+          <div class="q-mt-xl">
             <q-card
               flat
               bordered
@@ -201,24 +171,64 @@
               style="background-color: #1e1e1e; border-color: #333"
             >
               <div class="text-h6 text-weight-bold text-white q-mb-md">Portfolio Summary</div>
+
+              <!-- Main Stats Row -->
               <div class="row q-gutter-lg">
-                <div class="col-12 col-sm-4">
+                <div class="col-12 col-sm-3">
                   <div class="text-grey-5">Total Locked</div>
-                  <div class="text-h4 text-primary text-weight-bold">
-                    {{ getTotalSatoshis() }} satoshis
+                  <div class="row items-center q-gutter-sm">
+                    <div class="text-h4 text-primary text-weight-bold">
+                      {{ formatBalance(getTotalSatoshis()) }}
+                    </div>
+                    <q-select
+                      v-model="balanceUnit"
+                      :options="balanceUnitOptions"
+                      option-value="value"
+                      option-label="label"
+                      emit-value
+                      map-options
+                      dense
+                      outlined
+                      dark
+                      style="min-width: 90px; font-size: 12px"
+                    />
                   </div>
                 </div>
-                <div class="col-12 col-sm-4">
+                <div class="col-12 col-sm-3">
                   <div class="text-grey-5">Total Vaults</div>
                   <div class="text-h4 text-white text-weight-bold">
                     {{ vaults.length }}
                   </div>
                 </div>
-                <div class="col-12 col-sm-4">
+                <div class="col-12 col-sm-3">
                   <div class="text-grey-5">Ready to Withdraw</div>
                   <div class="text-h4 text-positive text-weight-bold">
                     {{ getReadyToWithdrawCount() }}
                   </div>
+                </div>
+                <div class="col-12 col-sm-3">
+                  <div class="text-grey-5">Wallet</div>
+                  <div
+                    class="text-caption text-primary ellipsis"
+                    style="max-width: 150px"
+                    :title="connectedAddress"
+                  >
+                    {{
+                      connectedAddress
+                        ? connectedAddress.slice(0, 8) + '...' + connectedAddress.slice(-6)
+                        : 'Not Connected'
+                    }}
+                  </div>
+                  <q-btn
+                    flat
+                    dense
+                    color="primary"
+                    icon="history"
+                    label="Activity"
+                    size="sm"
+                    @click="showActivityHistory = true"
+                    class="q-mt-xs"
+                  />
                 </div>
               </div>
             </q-card>
@@ -372,6 +382,13 @@ export default defineComponent({
       // ✅ Activity log filters
       timeFilter: 'all', // today, yesterday, thisWeek, thisMonth, thisYear, all
       activityTypeFilter: 'all', // all, deposits, withdrawals
+      // ✅ Balance unit display
+      balanceUnit: 'sats', // 'sats', 'mBCH', 'BCH'
+      balanceUnitOptions: [
+        { label: 'sats', value: 'sats' },
+        { label: 'mBCH', value: 'mBCH' },
+        { label: 'BCH', value: 'BCH' },
+      ],
     }
   },
 
@@ -713,7 +730,18 @@ export default defineComponent({
 
     formatBalance(satoshis) {
       if (!satoshis) return '0'
-      return satoshis.toString()
+
+      const sats = Number(satoshis)
+
+      switch (this.balanceUnit) {
+        case 'BCH':
+          return (sats / 100000000).toFixed(8)
+        case 'mBCH':
+          return (sats / 100000).toFixed(5)
+        case 'sats':
+        default:
+          return sats.toLocaleString()
+      }
     },
 
     formatDate(timestamp) {
