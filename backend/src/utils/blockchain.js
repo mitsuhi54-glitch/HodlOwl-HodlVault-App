@@ -21,7 +21,7 @@ function getQueryProvider(network, hostname) {
   return provider
 }
 
-function inferNetworkFromAddress(address) {
+export function inferNetworkFromAddress(address) {
   if (typeof address !== 'string') return BCH_NETWORK
   const prefix = address.includes(':') ? address.split(':')[0] : null
   if (prefix === 'bitcoincash') return 'mainnet'

@@ -25,6 +25,29 @@
             </div>
           </div>
 
+          <!-- Backend Error State -->
+          <div v-else-if="backendError" class="text-center q-pa-xl">
+            <q-icon name="cloud_off" size="64px" class="text-negative q-mb-md" />
+            <h3
+              class="text-h5"
+              :class="$q.dark.isActive ? 'text-negative q-mb-md' : 'text-negative q-mb-md'"
+            >
+              Unable to Load Vaults
+            </h3>
+            <p :class="$q.dark.isActive ? 'text-grey-6' : 'text-grey-8'" q-mb-lg>
+              {{ backendError }}
+            </p>
+            <q-btn
+              color="primary"
+              label="Retry"
+              icon="refresh"
+              size="lg"
+              class="text-weight-bold"
+              style="background-color: #00d588; color: #000"
+              @click="loadVaults"
+            />
+          </div>
+
           <div v-else-if="vaults.length === 0" class="text-center q-pa-xl">
             <q-icon
               name="account_balance"
@@ -233,7 +256,7 @@
                   </div>
                 </div>
                 <div class="col-12 col-sm-3">
-                  <div class="text-grey-5">Wallet</div>
+                  <div class="text-grey-5">Wallet Address</div>
                   <div
                     class="text-caption text-primary ellipsis"
                     style="max-width: 150px"
@@ -416,6 +439,7 @@ export default defineComponent({
     return {
       loading: false,
       vaults: [],
+      backendError: null,
       currentBchPrice: null,
       priceLoading: false,
       balanceInterval: null,
@@ -693,117 +717,67 @@ export default defineComponent({
 
     async loadVaults() {
       this.loading = true
+      this.backendError = null
       try {
-        // ✅ PROFESSIONAL: Fetch from backend first (source of truth)
         let storedVaults = []
 
         if (this.connectedAddress) {
           try {
-            console.log('🔄 Fetching vaults from backend for wallet:', this.connectedAddress)
+            console.log('Fetching vaults from backend for wallet:', this.connectedAddress)
             storedVaults = await vaultStorage.getVaultsByWallet(this.connectedAddress)
-            console.log(`✅ Loaded ${storedVaults.length} vaults from backend`)
-
-            // Sync backend vaults to localStorage for offline access
-            if (storedVaults.length > 0) {
-              const existingLocal = this.getAllStoredVaults()
-              const merged = this.mergeVaults(existingLocal, storedVaults)
-              localStorage.setItem('hodl-vault-all-vaults', JSON.stringify(merged))
-              console.log('💾 Synced backend vaults to localStorage')
-            }
+            console.log(`Loaded ${storedVaults.length} vaults from backend`)
           } catch (backendError) {
-            console.warn(
-              '⚠️ Failed to fetch from backend, falling back to localStorage:',
-              backendError,
-            )
-            // Fallback to localStorage
-            storedVaults = this.getAllStoredVaults().filter(
-              (vault) => vault.walletAddress === this.connectedAddress,
-            )
+            console.error('Failed to fetch vaults from backend:', backendError)
+            this.backendError = backendError.message || 'Backend is unreachable'
+            this.vaults = []
+            this.loading = false
+            return
           }
         } else {
-          // No wallet connected, use localStorage only
-          storedVaults = this.getAllStoredVaults()
+          // No wallet connected
+          this.vaults = []
+          this.loading = false
+          return
         }
 
-        // Filter vaults for current wallet and refresh their balances
+        // Process vaults with blockchain balance refresh
         this.vaults = await Promise.all(
-          storedVaults
-            .filter((vault) => vault.walletAddress === this.connectedAddress)
-            .map(async (vault) => {
-              // Ensure priceTarget is computed from priceTargetCents for display
-              if (!vault.priceTarget && vault.priceTargetCents) {
-                vault.priceTarget = vault.priceTargetCents / 100
+          storedVaults.map(async (vault) => {
+            if (!vault.priceTarget && vault.priceTargetCents) {
+              vault.priceTarget = vault.priceTargetCents / 100
+            }
+
+            try {
+              const { getAddressBalance } = await import('src/services/blockchain')
+              const currentBalance = await getAddressBalance(vault.contractAddress)
+
+              vaultStorage.updateVaultBalance(vault.contractAddress, Number(currentBalance))
+
+              return {
+                ...vault,
+                balance: Number(currentBalance),
+                canWithdraw: this.checkCanWithdraw({ ...vault, balance: Number(currentBalance) }),
               }
-
-              // Refresh balance from blockchain
-              try {
-                const { getAddressBalance } = await import('src/services/blockchain')
-                const currentBalance = await getAddressBalance(vault.contractAddress)
-
-                // Update vault balance in storage (convert BigInt to Number for JSON serialization)
-                vaultStorage.updateVaultBalance(vault.contractAddress, Number(currentBalance))
-
-                return {
-                  ...vault,
-                  balance: Number(currentBalance),
-                  canWithdraw: this.checkCanWithdraw({ ...vault, balance: Number(currentBalance) }),
-                }
-              } catch (balanceError) {
-                console.warn(
-                  `Failed to fetch balance for vault ${vault.contractAddress}:`,
-                  balanceError,
-                )
-                return {
-                  ...vault,
-                  canWithdraw: this.checkCanWithdraw(vault),
-                }
+            } catch (balanceError) {
+              console.warn(
+                `Failed to fetch balance for vault ${vault.contractAddress}:`,
+                balanceError,
+              )
+              return {
+                ...vault,
+                canWithdraw: this.checkCanWithdraw(vault),
               }
-            }),
+            }
+          }),
         )
 
         console.log('Loaded vaults with refreshed balances:', this.vaults)
       } catch (error) {
         console.error('Failed to load vaults:', error)
-        this.$q.notify({
-          type: 'negative',
-          message: 'Failed to load vaults',
-        })
+        this.backendError = 'An unexpected error occurred while loading vaults'
       } finally {
         this.loading = false
       }
-    },
-
-    /**
-     * Merge local and backend vaults, keeping the most recent data
-     * Backend is source of truth, but preserves local data if newer
-     */
-    mergeVaults(localVaults, backendVaults) {
-      const merged = [...localVaults]
-
-      for (const backendVault of backendVaults) {
-        const existingIndex = merged.findIndex(
-          (v) => v.contractAddress === backendVault.contractAddress,
-        )
-
-        if (existingIndex >= 0) {
-          // Update existing with backend data (backend is source of truth)
-          const localVault = merged[existingIndex]
-          const backendUpdated = new Date(backendVault.updatedAt).getTime()
-          const localUpdated = localVault.updatedAt || 0
-
-          merged[existingIndex] = {
-            ...localVault,
-            ...backendVault,
-            // Keep local balance if it's more recent
-            ...(backendUpdated > localUpdated ? {} : { balance: localVault.balance }),
-          }
-        } else {
-          // Add new vault from backend
-          merged.push(backendVault)
-        }
-      }
-
-      return merged
     },
 
     // ✅ Auto-refresh methods for automatic data updates (silent balance-only updates)
@@ -849,23 +823,6 @@ export default defineComponent({
       }
 
       console.log('✅ Silent balance refresh complete')
-    },
-
-    getAllStoredVaults() {
-      if (typeof localStorage === 'undefined') return []
-
-      // Use only the new multi-vault storage system
-      const multiVaults = localStorage.getItem('hodl-vault-all-vaults')
-      if (multiVaults) {
-        try {
-          return JSON.parse(multiVaults)
-        } catch (e) {
-          console.error('Failed to parse multi-vaults:', e)
-          return []
-        }
-      }
-
-      return []
     },
 
     async fetchCurrentPrice() {
@@ -937,11 +894,8 @@ export default defineComponent({
     },
 
     selectVault(vault) {
-      // Store selected vault in localStorage for the vault page
-      localStorage.setItem('hodl-vault-selected-vault', JSON.stringify(vault))
-
-      // Navigate to vault management page
-      this.$router.push('/vault/manage')
+      // Pass contract address via route query — VaultManagePage fetches from backend
+      this.$router.push(`/vault/manage?contract=${encodeURIComponent(vault.contractAddress)}`)
     },
 
     startBalancePolling() {

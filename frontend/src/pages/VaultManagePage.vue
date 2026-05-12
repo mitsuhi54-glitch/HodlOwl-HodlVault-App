@@ -490,47 +490,42 @@ export default defineComponent({
 
     async loadSelectedVault() {
       try {
-        // Get selected vault from localStorage
-        const selectedVaultData = localStorage.getItem('hodl-vault-selected-vault')
-        if (!selectedVaultData) {
-          console.log('No selected vault found')
+        // Get contract address from route query param
+        const contractAddress = this.$route.query.contract
+        if (!contractAddress) {
+          console.log('No vault contract address in route query')
           return
         }
 
-        let vaultData = JSON.parse(selectedVaultData)
-        console.log('Initial vaultData from localStorage:', vaultData)
+        console.log('Fetching vault data for contract:', contractAddress)
 
-        // ✅ Defensive: Convert old priceTarget field to priceTargetCents if needed
-        // ✅ Defensive: Convert old priceTarget field to priceTargetCents if needed
-        if (!vaultData.priceTargetCents && vaultData.priceTarget) {
-          vaultData.priceTargetCents = Math.round(vaultData.priceTarget * 100)
-          console.log('🔄 Converted priceTarget to priceTargetCents:', vaultData.priceTargetCents)
+        // Fetch complete vault data from backend
+        const { vaultStorage } = await import('src/services/vault-storage')
+        const vaultData = await vaultStorage.getVaultByContractAddressFromBackend(contractAddress)
+
+        if (!vaultData) {
+          console.error('Vault not found in backend:', contractAddress)
+          this.$q.notify({
+            type: 'negative',
+            message: 'Vault not found',
+          })
+          return
         }
 
-        // ✅ Check if we have all required fields
-        const hasRequiredFields =
-          vaultData.ownerPkhHex && vaultData.oraclePkHex && vaultData.priceTargetCents
+        console.log('Vault data fetched from backend:', vaultData)
 
-        if (!hasRequiredFields && vaultData.contractAddress) {
-          console.log('⚠️ Incomplete vault data, fetching from backend...')
-          const { vaultStorage } = await import('src/services/vault-storage')
-          const completeVault = await vaultStorage.getVaultByContractAddressFromBackend(
-            vaultData.contractAddress,
-          )
+        // Defensive: Convert priceTarget to priceTargetCents if needed
+        if (!vaultData.priceTargetCents && vaultData.priceTarget) {
+          vaultData.priceTargetCents = Math.round(vaultData.priceTarget * 100)
+        }
 
-          if (completeVault) {
-            console.log('✅ Complete vault data fetched from backend:', completeVault)
-            vaultData = completeVault
-            // Update localStorage with complete data
-            localStorage.setItem('hodl-vault-selected-vault', JSON.stringify(completeVault))
-          } else {
-            console.error('❌ Failed to fetch complete vault data from backend')
-            this.$q.notify({
-              type: 'negative',
-              message: 'Failed to load vault data: Incomplete data',
-            })
-            return
-          }
+        if (!vaultData.ownerPkhHex || !vaultData.oraclePkHex || !vaultData.priceTargetCents) {
+          console.error('Incomplete vault data from backend — missing required fields')
+          this.$q.notify({
+            type: 'negative',
+            message: 'Failed to load vault data: Incomplete data from server',
+          })
+          return
         }
 
         // Initialize contract for the selected vault
@@ -541,13 +536,12 @@ export default defineComponent({
           vaultData.walletAddress,
         )
 
-        // Compute priceTarget (dollars) from priceTargetCents for display
         const priceTargetCents = vaultData.priceTargetCents
         const priceTarget = priceTargetCents / 100
 
         this.vault = {
-          _id: vaultData._id || vaultData.id, // ✅ Include MongoDB ID for delete operations
-          name: vaultData.name || 'Unnamed Vault', // ✅ Include vault name for activity logs
+          _id: vaultData._id || vaultData.id,
+          name: vaultData.name || 'Unnamed Vault',
           contractAddress: vaultData.contractAddress,
           balance: vaultData.balance || 0,
           priceTarget: priceTarget,
@@ -556,7 +550,7 @@ export default defineComponent({
           oraclePkHex: vaultData.oraclePkHex,
           contract,
           originalFundingAddress: vaultData.originalFundingAddress,
-          autoWithdrawal: !!vaultData.autoWithdrawal, // Auto-withdrawal flag from backend
+          autoWithdrawal: !!vaultData.autoWithdrawal,
         }
 
         console.log('Selected vault loaded:', vaultData.contractAddress)
@@ -564,7 +558,7 @@ export default defineComponent({
         console.error('Failed to load selected vault:', error)
         this.$q.notify({
           type: 'negative',
-          message: 'Failed to load vault data',
+          message: error.message || 'Failed to load vault data',
         })
       }
     },

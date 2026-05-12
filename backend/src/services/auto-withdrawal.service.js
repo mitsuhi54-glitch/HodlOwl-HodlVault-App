@@ -19,6 +19,7 @@ import { fetchOraclePrice } from './oracle.service.js'
 import { logActivity } from './activity-log.service.js'
 import { sendEvent } from './sse.service.js'
 import { sendAutoWithdrawalNotification } from './onesignal.service.js'
+import { inferNetworkFromAddress } from '../utils/blockchain.js'
 
 // Load contract artifact using fs (Node.js 20 compatible)
 const __filename = fileURLToPath(import.meta.url)
@@ -27,17 +28,18 @@ const HodlVaultArtifact = JSON.parse(
   readFileSync(join(__dirname, '../contract/HodlVault.json'), 'utf-8'),
 )
 
-// Network configuration from env
+// Network configuration from env (fallback for unrecognized prefixes)
 const BCH_NETWORK = process.env.BCH_NETWORK || 'chipnet'
 
 // Miner fee for withdrawal transaction (matches contract constant)
 const MINER_FEE = 1000
 
 /**
- * Get the Electrum provider for the configured network
+ * Get the Electrum provider for the specified network
+ * @param {string} network - Network name (mainnet, chipnet, testnet3)
  */
-function getProvider() {
-  return new ElectrumNetworkProvider(BCH_NETWORK)
+function getProvider(network) {
+  return new ElectrumNetworkProvider(network || BCH_NETWORK)
 }
 
 /**

@@ -37,8 +37,8 @@ const DEFAULT_NETWORK =
     ? import.meta.env.VITE_BCH_NETWORK
     : 'chipnet'
 
-let networkProvider = null
 const queryProviders = new Map()
+const contractProviders = new Map()
 
 function getFallbackHostnames(network) {
   if (network === 'testnet3') return ['testnet.bitcoincash.network']
@@ -76,11 +76,11 @@ function inferNetworkFromAddress(address) {
  * @returns {ElectrumNetworkProvider}
  */
 function getProvider(network) {
-  console.log('network', network)
-  if (!networkProvider) {
-    networkProvider = new ElectrumNetworkProvider(network)
-  }
-  return networkProvider
+  const key = network || DEFAULT_NETWORK
+  if (contractProviders.has(key)) return contractProviders.get(key)
+  const provider = new ElectrumNetworkProvider(key)
+  contractProviders.set(key, provider)
+  return provider
 }
 
 export async function getAddressBalance(address) {

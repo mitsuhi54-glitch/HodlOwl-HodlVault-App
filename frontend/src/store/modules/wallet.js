@@ -86,17 +86,31 @@ const mutations = {
 const actions = {
   loginUser({ commit, dispatch }, walletData) {
     commit('SET_WALLET', walletData)
-    // Sync vaults with backend after wallet connection
+    // Clear any stale vault data from previous session, then sync with backend
+    dispatch('clearLocalVaultData')
     dispatch('syncWithBackend')
   },
-  clearWallet({ commit }) {
+  clearWallet({ commit, dispatch }) {
+    dispatch('clearLocalVaultData')
     commit('CLEAR_WALLET')
   },
 
   /**
-   * Sync vaults and preferences with backend
-   * Called automatically after wallet connection
-   * Two-way sync: Backend → LocalStorage (immediate) AND LocalStorage → Backend (migration)
+   * Clear stale vault data from localStorage when switching wallets
+   */
+  async clearLocalVaultData() {
+    try {
+      const { vaultStorage } = await import('src/services/vault-storage')
+      vaultStorage.clearLocalVaultData()
+      console.log('Local vault data cleared for wallet switch')
+    } catch {
+      // vaultStorage may not be needed if wallet is being cleared
+    }
+  },
+
+  /**
+   * Sync vaults with backend after wallet connection
+   * Backend is the single source of truth — no localStorage caching.
    */
   async syncWithBackend({ state }) {
     if (!state.address) {
@@ -105,52 +119,18 @@ const actions = {
     }
 
     try {
-      // Import vaultStorage dynamically to avoid circular dependencies
       const { vaultStorage } = await import('src/services/vault-storage')
 
-      // Check if backend is available
-      const isAvailable = await vaultStorage.checkBackendAvailability()
-      console.log('Backend availability check:', isAvailable)
+      // Fetch vaults from backend for the connected wallet
+      console.log('Fetching vaults from backend for:', state.address)
+      const backendVaults = await vaultStorage.getVaultsByWallet(state.address)
+      console.log(`Fetched ${backendVaults.length} vaults from backend`)
 
-      if (isAvailable) {
-        // ✅ TWO-WAY SYNC: First fetch from backend (source of truth)
-        console.log('🔄 Fetching vaults from backend for immediate sync...')
-        const backendVaults = await vaultStorage.getVaultsByWallet(state.address)
-        console.log(`✅ Fetched ${backendVaults.length} vaults from backend`)
-
-        // Sync backend vaults to localStorage for offline access and fast loading
-        if (backendVaults.length > 0) {
-          const allLocalVaults = vaultStorage.getAllVaultsLocal()
-          const otherWalletsVaults = allLocalVaults.filter((v) => v.walletAddress !== state.address)
-
-          // Merge: Keep other wallets' vaults + update current wallet's vaults from backend
-          const mergedVaults = [...otherWalletsVaults, ...backendVaults]
-          localStorage.setItem('hodl-vault-all-vaults', JSON.stringify(mergedVaults))
-          console.log('💾 Synced backend vaults to localStorage for fast access')
-        }
-
-        // Then sync any local-only vaults to backend (migration)
-        await vaultStorage.syncVaultsWithBackend(state.address)
-        console.log('Vault sync with backend completed')
-      } else {
-        console.warn('Backend not available, operating in localStorage-only mode')
-      }
+      return backendVaults
     } catch (error) {
-      console.error('Backend sync failed:', error)
-    }
-  },
-
-  /**
-   * Check backend health (can be called manually)
-   */
-  async checkBackendHealth() {
-    try {
-      const { vaultStorage } = await import('src/services/vault-storage')
-      const isAvailable = await vaultStorage.checkBackendAvailability()
-      return { available: isAvailable }
-    } catch (error) {
-      console.error('Backend health check failed:', error)
-      return { available: false, error: error.message }
+      console.error('Backend sync failed:', error.message || error)
+      // Don't fall back to localStorage — show error state in UI
+      return []
     }
   },
 }

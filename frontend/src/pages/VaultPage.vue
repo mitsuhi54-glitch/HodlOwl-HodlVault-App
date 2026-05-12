@@ -238,7 +238,6 @@ export default defineComponent({
   data() {
     return {
       form: {
-        // amount: null,
         priceTarget: null,
         vaultName: '',
       },
@@ -259,9 +258,6 @@ export default defineComponent({
         signature_hex: '',
         oracle_pubkey_hex: '',
       },
-
-      // Vault persistence (localStorage)
-      vaultPersistKey: 'hodl-vault-active-vault',
 
       // Original funding address for auto-withdrawal
       originalFundingAddress: '',
@@ -357,38 +353,6 @@ export default defineComponent({
   },
 
   methods: {
-    persistVaultState(vaultState) {
-      if (typeof localStorage === 'undefined') return
-      try {
-        if (!vaultState) {
-          localStorage.removeItem(this.vaultPersistKey)
-          return
-        }
-        localStorage.setItem(this.vaultPersistKey, JSON.stringify(vaultState))
-      } catch {
-        // ignore persistence errors
-      }
-    },
-
-    clearPersistedVaultState() {
-      if (typeof localStorage === 'undefined') return
-      try {
-        localStorage.removeItem(this.vaultPersistKey)
-      } catch {
-        // ignore persistence errors
-      }
-    },
-
-    loadPersistedVaultState() {
-      if (typeof localStorage === 'undefined') return null
-      try {
-        const stored = localStorage.getItem(this.vaultPersistKey)
-        return stored ? JSON.parse(stored) : null
-      } catch {
-        return null
-      }
-    },
-
     loadSelectedVault(vaultData) {
       try {
         // ✅ Defensive: Convert old priceTarget field to priceTargetCents if needed
@@ -495,20 +459,6 @@ export default defineComponent({
 
         if (!oraclePkHex) {
           throw new Error('Oracle public key not loaded. Refresh the price first.')
-        }
-
-        // Check for duplicate vault with same parameters
-        const existingVault = vaultStorage.checkForDuplicateVault(
-          this.walletAddress,
-          this.developerPriceTargetCents, // Use cents for duplicate check
-        )
-        if (existingVault) {
-          this.$q.notify({
-            type: 'warning',
-            message: `You already have a vault with target price ₱${this.form.priceTarget}. Each vault must have a unique target price.`,
-            timeout: 5000,
-          })
-          return
         }
 
         const contractAddress = await calculateContractAddress(
@@ -749,23 +699,6 @@ export default defineComponent({
   },
 
   mounted() {
-    // Check if we're coming from vault management with a selected vault
-    const selectedVault = localStorage.getItem('hodl-vault-selected-vault')
-    if (selectedVault) {
-      try {
-        const vault = JSON.parse(selectedVault)
-        this.loadSelectedVault(vault)
-        localStorage.removeItem('hodl-vault-selected-vault') // Clean up
-      } catch (error) {
-        console.error('Failed to load selected vault:', error)
-        // Fallback to legacy loading
-        this.loadPersistedVaultState()
-      }
-    } else {
-      // Load existing vault from legacy system
-      this.loadPersistedVaultState()
-    }
-
     // Start price monitoring
     this.refreshPrice()
 
