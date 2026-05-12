@@ -4,6 +4,8 @@ import {
   getWalletPreferences,
   updateWalletPreferences,
   deleteWalletPreferences,
+  registerOneSignalPlayer,
+  unregisterOneSignalPlayer,
 } from '../controllers/wallet-preferences.controller.js'
 
 const router = Router()
@@ -35,5 +37,20 @@ router.put('/', updateWalletPreferences)
  * @header  x-wallet-address - Wallet address
  */
 router.delete('/', deleteWalletPreferences)
+
+/**
+ * @route   POST /api/v1/wallet/preferences/onesignal/register
+ * @desc    Register OneSignal player ID for push notifications
+ * @access  Wallet-based
+ * @body    playerId - OneSignal player/subscriber ID
+ */
+router.post('/onesignal/register', registerOneSignalPlayer)
+
+/**
+ * @route   POST /api/v1/wallet/preferences/onesignal/unregister
+ * @desc    Unregister OneSignal player ID (disable push notifications)
+ * @access  Wallet-based
+ */
+router.post('/onesignal/unregister', unregisterOneSignalPlayer)
 
 export default router

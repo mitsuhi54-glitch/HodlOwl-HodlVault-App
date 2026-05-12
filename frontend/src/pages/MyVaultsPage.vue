@@ -150,6 +150,32 @@
                     />
                   </div>
                 </div>
+
+                <!-- Auto-Withdrawal Toggle -->
+                <div class="row items-center q-mt-sm">
+                  <div class="col">
+                    <q-toggle
+                      v-model="vault.autoWithdrawal"
+                      :label="vault.autoWithdrawal ? 'Auto-withdrawal ON' : 'Auto-withdrawal OFF'"
+                      color="positive"
+                      :class="$q.dark.isActive ? 'text-white' : 'text-grey-9'"
+                      dense
+                      :disable="togglingAutoWithdrawal[vault.id] || vault.status === 'withdrawn'"
+                      @update:model-value="(val) => toggleAutoWithdrawal(vault, val)"
+                    >
+                      <q-tooltip>
+                        {{
+                          vault.autoWithdrawal
+                            ? 'Server will automatically withdraw when price target is reached'
+                            : 'Enable to allow server to auto-withdraw when target is reached'
+                        }}
+                      </q-tooltip>
+                    </q-toggle>
+                  </div>
+                  <div class="col-auto" v-if="togglingAutoWithdrawal[vault.id]">
+                    <q-spinner size="16px" color="primary" />
+                  </div>
+                </div>
               </q-card-section>
 
               <!-- Progress Bar -->
@@ -229,6 +255,21 @@
                     @click="showActivityHistory = true"
                     class="q-mt-xs"
                   />
+                  <!-- Notification Toggle -->
+                  <div class="q-mt-sm">
+                    <q-toggle
+                      v-model="notificationsEnabled"
+                      label="Notifications"
+                      color="primary"
+                      dense
+                      :disable="!connectedAddress || notificationPermissionDenied"
+                      @update:model-value="toggleNotifications"
+                    />
+                    <q-tooltip v-if="!connectedAddress">Connect wallet first</q-tooltip>
+                    <q-tooltip v-if="notificationPermissionDenied">
+                      Permission denied. Enable in browser settings.
+                    </q-tooltip>
+                  </div>
                 </div>
               </div>
             </q-card>
@@ -360,6 +401,13 @@
 import { defineComponent } from 'vue'
 import { vaultStorage } from 'src/services/vault-storage'
 import { connectSSE, disconnectSSE } from 'src/services/sse.service'
+import {
+  requestNotificationPermission,
+  unsubscribeFromNotifications,
+  isNotificationSubscribed,
+} from 'src/boot/onesignal'
+import { oneSignalApi } from 'src/services/onesignal-api'
+import { vaultApi } from 'src/services/api.service'
 
 export default defineComponent({
   name: 'MyVaultsPage',
@@ -389,6 +437,11 @@ export default defineComponent({
         { label: 'mBCH', value: 'mBCH' },
         { label: 'BCH', value: 'BCH' },
       ],
+      // ✅ Push notification state
+      notificationsEnabled: false,
+      notificationPermissionDenied: false,
+      // ✅ Auto-withdrawal toggle loading states
+      togglingAutoWithdrawal: {},
     }
   },
 
@@ -473,6 +526,9 @@ export default defineComponent({
     // ✅ Connect to real-time SSE updates
     connectSSE()
 
+    // ✅ Check notification subscription status
+    this.checkNotificationStatus()
+
     // Listen for vault withdrawal events
     window.addEventListener('vault-withdrawn', this.handleVaultWithdrawn)
 
@@ -491,6 +547,111 @@ export default defineComponent({
   },
 
   methods: {
+    /**
+     * Toggle push notifications on/off
+     */
+    async toggleNotifications(enabled) {
+      if (enabled) {
+        // Turn ON: request permission and subscribe
+        const result = await requestNotificationPermission()
+        if (result.success) {
+          this.notificationsEnabled = true
+          this.notificationPermissionDenied = false
+          await oneSignalApi.updateNotificationPreference(true)
+          this.$q.notify({ type: 'positive', message: 'Push notifications enabled' })
+        } else {
+          this.notificationsEnabled = false
+          if (result.error === 'User denied permission' || result.error?.includes('denied')) {
+            this.notificationPermissionDenied = true
+            this.$q.notify({
+              type: 'warning',
+              message: 'Notification permission denied. Enable in browser settings.',
+            })
+          } else {
+            this.$q.notify({
+              type: 'negative',
+              message: 'Failed to enable notifications: ' + (result.error || 'Unknown error'),
+            })
+          }
+        }
+      } else {
+        // Turn OFF: unsubscribe
+        await unsubscribeFromNotifications()
+        this.notificationsEnabled = false
+        this.$q.notify({ type: 'info', message: 'Push notifications disabled' })
+      }
+    },
+
+    /**
+     * Check current notification subscription status
+     */
+    async checkNotificationStatus() {
+      try {
+        // Check browser permission
+        if (Notification.permission === 'denied') {
+          this.notificationPermissionDenied = true
+          this.notificationsEnabled = false
+          return
+        }
+
+        // Check OneSignal subscription
+        const subscribed = await isNotificationSubscribed()
+        this.notificationsEnabled = subscribed
+
+        // Also check backend preference
+        if (this.connectedAddress) {
+          const prefs = await oneSignalApi.getPreferences()
+          if (prefs?.preferences?.notifications === false) {
+            this.notificationsEnabled = false
+          }
+        }
+      } catch (err) {
+        console.warn('[Notifications] Status check failed:', err)
+      }
+    },
+
+    /**
+     * Toggle auto-withdrawal for a vault
+     */
+    async toggleAutoWithdrawal(vault, enabled) {
+      const vaultId = vault.id || vault._id
+
+      // Set loading state
+      this.togglingAutoWithdrawal = { ...this.togglingAutoWithdrawal, [vaultId]: true }
+
+      try {
+        const response = await vaultApi.toggleAutoWithdrawal(vaultId, enabled)
+
+        // Update local vault state
+        vault.autoWithdrawal = enabled
+
+        // Update in vaultStorage too
+        await vaultStorage.updateVault(vault.contractAddress, { autoWithdrawal: enabled })
+
+        this.$q.notify({
+          type: 'positive',
+          message: `Auto-withdrawal ${enabled ? 'enabled' : 'disabled'} for ${vault.name || 'vault'}`,
+          timeout: 3000,
+        })
+
+        console.log('[AutoWithdrawal] Toggled:', response)
+      } catch (err) {
+        console.error('[AutoWithdrawal] Toggle failed:', err)
+
+        // Revert the toggle on error
+        vault.autoWithdrawal = !enabled
+
+        this.$q.notify({
+          type: 'negative',
+          message: err?.response?.data?.message || 'Failed to toggle auto-withdrawal',
+          timeout: 5000,
+        })
+      } finally {
+        // Clear loading state
+        this.togglingAutoWithdrawal = { ...this.togglingAutoWithdrawal, [vaultId]: false }
+      }
+    },
+
     /**
      * Handle real-time vault withdrawal event from SSE
      */

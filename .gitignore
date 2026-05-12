@@ -115,7 +115,7 @@ build/Release
 .node_repl_history
 
 # Documentation
-docs/
+# docs/
 
 # Postman
 postman/

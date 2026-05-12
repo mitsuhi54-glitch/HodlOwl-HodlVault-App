@@ -58,6 +58,7 @@ function getQueryProvider(network, hostname) {
 }
 
 function inferNetworkFromAddress(address) {
+  console.log('address', address)
   if (typeof address !== 'string') return DEFAULT_NETWORK
   const prefix = address.includes(':') ? address.split(':')[0] : null
   if (prefix === 'bitcoincash') return 'mainnet'
@@ -74,9 +75,10 @@ function inferNetworkFromAddress(address) {
  * Get or create the network provider instance
  * @returns {ElectrumNetworkProvider}
  */
-function getProvider() {
+function getProvider(network) {
+  console.log('network', network)
   if (!networkProvider) {
-    networkProvider = new ElectrumNetworkProvider(DEFAULT_NETWORK)
+    networkProvider = new ElectrumNetworkProvider(network)
   }
   return networkProvider
 }
@@ -106,17 +108,13 @@ export async function getAddressBalance(address) {
  * @param {string} ownerPkhHex - Owner public key hash (20 bytes) as hex string
  * @param {string} oraclePkHex - Oracle public key (33 bytes compressed) as hex string
  * @param {number|bigint} priceTarget - Price target in satoshis or price units
- * @param {string} [vaultSalt] - Optional unique salt to ensure unique contract addresses
  * @returns {Contract} Initialized contract instance
  */
-export function initializeHodlVaultContract(
-  ownerPkhHex,
-  oraclePkHex,
-  priceTarget,
-  vaultSalt = null,
-) {
-  console.log('vaultSalt', vaultSalt)
-  const provider = getProvider()
+export function initializeHodlVaultContract(ownerPkhHex, oraclePkHex, priceTarget, ownerAddress) {
+  const network = inferNetworkFromAddress(ownerAddress)
+  const provider = getProvider(network)
+  console.log('provider', provider)
+  console.log('ownerAddress[p[[[[[[[[[[', ownerAddress)
 
   // Convert hex strings to bytes for constructor
   const ownerPkh = hexToBin(ownerPkhHex)
@@ -125,9 +123,6 @@ export function initializeHodlVaultContract(
   // Ensure priceTarget is a BigInt (CashScript expects int)
   const priceTargetBigInt = BigInt(priceTarget)
 
-  // Generate unique salt if not provided (for new vaults)
-  const salt = vaultSalt ? hexToBin(vaultSalt) : crypto.getRandomValues(new Uint8Array(32))
-  console.log('salt', salt)
   const constructorArgs = [ownerPkh, oraclePk, priceTargetBigInt]
 
   const contract = new Contract(HodlVaultArtifact, constructorArgs, {
@@ -144,18 +139,22 @@ export function initializeHodlVaultContract(
  * @param {string} ownerPkhHex - Owner public key hash (20 bytes) as hex string
  * @param {string} oraclePkHex - Oracle public key (33 bytes compressed) as hex string
  * @param {number|bigint} priceTarget - Price target
- * @param {string} [vaultSalt] - Optional unique salt to ensure unique contract addresses
+
  * @returns {Promise<string>} Contract address (CashAddr format)
  */
 export async function calculateContractAddress(
   ownerPkhHex,
   oraclePkHex,
   priceTarget,
-  vaultSalt = null,
+  ownerAddress,
 ) {
   try {
-    console.log('vaultSalt', vaultSalt)
-    const contract = initializeHodlVaultContract(ownerPkhHex, oraclePkHex, priceTarget, vaultSalt)
+    const contract = initializeHodlVaultContract(
+      ownerPkhHex,
+      oraclePkHex,
+      priceTarget,
+      ownerAddress,
+    )
     return contract.address
   } catch (error) {
     throw new Error(`RAW CONTRACT ADDRESS ERROR: ${JSON.stringify(error, null, 2)}`)
@@ -199,7 +198,8 @@ export async function spendVault(
   },
 ) {
   const { TransactionBuilder } = await import('cashscript')
-  const provider = getProvider()
+  const network = inferNetworkFromAddress(ownerAddress)
+  const provider = getProvider(network)
 
   try {
     const utxos = await contract.getUtxos()
@@ -571,8 +571,9 @@ export async function depositToVault(toAddress, amountSats, walletConnectRequest
     await new Promise((resolve) => setTimeout(resolve, 5000))
     return { txid: null, raw: result, success: true }
   }
+  const network = inferNetworkFromAddress(toAddress)
+  const provider = getProvider(network)
 
-  const provider = getProvider()
   let txid = null
   try {
     txid = await provider.sendRawTransaction(signedHex)

@@ -15,7 +15,6 @@ export const createVault = async (req, res) => {
       ownerPkhHex,
       oraclePkHex,
       originalFundingAddress,
-      vaultSalt,
       name,
       autoWithdrawal,
     } = req.body
@@ -29,7 +28,6 @@ export const createVault = async (req, res) => {
       hasOwnerPkhHex: !!ownerPkhHex,
       hasOraclePkHex: !!oraclePkHex,
       hasOriginalFundingAddress: !!originalFundingAddress,
-      hasVaultSalt: !!vaultSalt,
     })
 
     // Validate required fields
@@ -40,7 +38,6 @@ export const createVault = async (req, res) => {
       'ownerPkhHex',
       'oraclePkHex',
       'originalFundingAddress',
-      'vaultSalt',
     ]
 
     const missingFields = requiredFields.filter((field) => !req.body[field])
@@ -67,7 +64,6 @@ export const createVault = async (req, res) => {
         existingVault.ownerPkhHex = ownerPkhHex
         existingVault.oraclePkHex = oraclePkHex
         existingVault.originalFundingAddress = originalFundingAddress
-        existingVault.vaultSalt = vaultSalt
         existingVault.name = name
         existingVault.autoWithdrawal = !!autoWithdrawal
         existingVault.updatedAt = new Date()
@@ -100,7 +96,6 @@ export const createVault = async (req, res) => {
       ownerPkhHex,
       oraclePkHex,
       originalFundingAddress,
-      vaultSalt,
       name: name || '',
       autoWithdrawal: !!autoWithdrawal,
     })
@@ -588,6 +583,76 @@ export const getVaultStats = async (req, res) => {
     })
   } catch (error) {
     console.error('Get vault stats error:', error)
+    res.status(500).json({
+      message: 'Internal server error',
+      error: error.message,
+    })
+  }
+}
+
+/**
+ * Toggle auto-withdrawal for a vault
+ */
+export const toggleAutoWithdrawal = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { autoWithdrawal } = req.body
+    const walletAddress = req.walletAddress || req.body.walletAddress
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: 'Invalid vault ID',
+      })
+    }
+
+    if (!walletAddress) {
+      return res.status(400).json({
+        message: 'Wallet address is required',
+      })
+    }
+
+    if (typeof autoWithdrawal !== 'boolean') {
+      return res.status(400).json({
+        message: 'autoWithdrawal must be a boolean value',
+      })
+    }
+
+    const vault = await Vault.findOne({ _id: id, walletAddress: walletAddress.toLowerCase() })
+
+    if (!vault) {
+      return res.status(404).json({
+        message: 'Vault not found',
+      })
+    }
+
+    // Update autoWithdrawal setting
+    vault.autoWithdrawal = autoWithdrawal
+    vault.updatedAt = new Date()
+    await vault.save()
+
+    // Log the activity
+    await logActivity({
+      walletAddress,
+      activityType: autoWithdrawal ? 'AUTO_WITHDRAWAL_ENABLED' : 'AUTO_WITHDRAWAL_DISABLED',
+      vaultId: vault._id,
+      vaultName: vault.name || 'Unnamed Vault',
+      contractAddress: vault.contractAddress,
+      details: {
+        autoWithdrawal,
+        priceTargetCents: vault.priceTargetCents,
+      },
+    })
+
+    res.status(200).json({
+      message: `Auto-withdrawal ${autoWithdrawal ? 'enabled' : 'disabled'} successfully`,
+      vault: {
+        ...vault.toJSON(),
+        balanceBCH: vault.balanceBCH,
+        hasFunds: vault.hasFunds,
+      },
+    })
+  } catch (error) {
+    console.error('Toggle auto-withdrawal error:', error)
     res.status(500).json({
       message: 'Internal server error',
       error: error.message,

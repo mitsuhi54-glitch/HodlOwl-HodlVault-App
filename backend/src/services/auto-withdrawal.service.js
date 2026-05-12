@@ -18,6 +18,7 @@ import { Vault } from '../models/vault.model.js'
 import { fetchOraclePrice } from './oracle.service.js'
 import { logActivity } from './activity-log.service.js'
 import { sendEvent } from './sse.service.js'
+import { sendAutoWithdrawalNotification } from './onesignal.service.js'
 
 // Load contract artifact using fs (Node.js 20 compatible)
 const __filename = fileURLToPath(import.meta.url)
@@ -45,7 +46,8 @@ function getProvider() {
  * @returns {Contract} CashScript contract instance
  */
 function initializeContract(vault) {
-  const provider = getProvider()
+  const network = inferNetworkFromAddress(vault.walletAddress)
+  const provider = getProvider(network)
 
   const ownerPkh = hexToBin(vault.ownerPkhHex)
   const oraclePk = hexToBin(vault.oraclePkHex)
@@ -251,6 +253,16 @@ export async function checkAndWithdraw() {
           txHash: result.txid,
           timestamp: new Date().toISOString(),
         })
+
+        // Send push notification (works even if user offline/tab closed)
+        try {
+          await sendAutoWithdrawalNotification(vault.walletAddress, {
+            vaultName: vault.name || 'Unnamed Vault',
+            contractAddress: vault.contractAddress,
+          })
+        } catch (notifyError) {
+          console.warn('[AutoWithdraw] Push notification failed:', notifyError.message)
+        }
 
         withdrawn++
       } else {

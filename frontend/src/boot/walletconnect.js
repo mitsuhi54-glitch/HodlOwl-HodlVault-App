@@ -90,7 +90,7 @@ function concatBytes(...parts) {
   return out
 }
 
-// Periodic connection status checker
+// Periodic connection status checker - runs less frequently to avoid overhead
 function startConnectionStatusChecker(store) {
   if (connectionStatusInterval) {
     clearInterval(connectionStatusInterval)
@@ -99,22 +99,20 @@ function startConnectionStatusChecker(store) {
   connectionStatusInterval = setInterval(async () => {
     if (currentSession && signClient) {
       try {
-        // Check if session is still valid
-        const sessions = signClient.session.getAll()
-        const currentSessionExists = sessions.find((s) => s.topic === currentSession.topic)
-
-        if (!currentSessionExists || currentSessionExists.expiry * 1000 < Date.now()) {
+        // Quick check if session still exists without full validation
+        const session = signClient.session.get(currentSession.topic)
+        if (!session || session.expiry * 1000 < Date.now()) {
           console.log('Connection status checker: Session no longer valid, clearing state')
           currentSession = null
           if (store) {
             store.commit('wallet/CLEAR_WALLET')
           }
         }
-      } catch (error) {
-        console.warn('Connection status check failed:', error)
+      } catch {
+        // Silent fail - don't spam console
       }
     }
-  }, 5000) // Check every 5 seconds
+  }, 30000) // Check every 30 seconds instead of 5
 }
 
 function stopConnectionStatusChecker() {
@@ -198,6 +196,7 @@ export async function recoverPublicKey(store) {
 
   const chainId = currentSession.namespaces?.bch?.chains?.[0] ?? BCH_CHIPNET_CHAIN
   console.log('CHAIN ID:', chainId)
+  console.log('CURRENT SESSION:', currentSession)
   const message = 'Login to HodlVault'
 
   const signatureResponse = await client.request({
@@ -266,10 +265,15 @@ export async function recoverPublicKey(store) {
 
 async function getSignClient(store) {
   if (signClient) return signClient
+  console.log('[WC TIMING] getSignClient: Initializing SignClient...')
+  const initStart = performance.now()
   signClient = await SignClient.init({
     projectId: PROJECT_ID,
     metadata: MODAL_METADATA,
   })
+  console.log(
+    `[WC TIMING] getSignClient: SignClient initialized (${(performance.now() - initStart).toFixed(2)}ms)`,
+  )
 
   // Add session event listeners for better state management
   signClient.on('session_event', ({ event, chainId }) => {
@@ -323,35 +327,30 @@ function getModal() {
   return modal
 }
 
-// Enhanced session cleanup function
+// Fast session cleanup - only clean current session if invalid
 async function cleanupStaleSessions(client, store) {
-  try {
-    const sessions = client.session.getAll()
-    const bchSessions = sessions.filter((s) => s.namespaces?.bch?.accounts?.length)
+  // Only check current session for performance - bulk cleanup not needed every connect
+  if (currentSession) {
+    try {
+      const session = client.session.get(currentSession.topic)
+      const methods = currentSession.namespaces?.bch?.methods ?? []
+      const hasRequiredMethods = REQUIRED_METHODS.every((m) => methods.includes(m))
 
-    for (const session of bchSessions) {
-      try {
-        // Check if session is still valid
-        const methods = session.namespaces?.bch?.methods ?? []
-        const hasRequiredMethods = REQUIRED_METHODS.every((m) => methods.includes(m))
-
-        if (!hasRequiredMethods || session.expiry * 1000 < Date.now()) {
-          console.log('Cleaning up stale session:', session.topic)
-          await client.disconnect({ topic: session.topic })
-          // Clear wallet state if this was the current session
-          if (currentSession?.topic === session.topic) {
-            currentSession = null
-            if (store) {
-              store.commit('wallet/CLEAR_WALLET')
-            }
-          }
+      if (!session || !hasRequiredMethods || session.expiry * 1000 < Date.now()) {
+        console.log('Cleaning up stale current session:', currentSession.topic)
+        try {
+          await client.disconnect({ topic: currentSession.topic })
+        } catch {
+          // Ignore disconnect errors
         }
-      } catch (cleanupError) {
-        console.warn('Failed to cleanup session:', cleanupError)
+        currentSession = null
+        if (store) {
+          store.commit('wallet/CLEAR_WALLET')
+        }
       }
+    } catch {
+      // Silent fail for performance
     }
-  } catch (error) {
-    console.warn('Session cleanup failed:', error)
   }
 }
 
@@ -360,34 +359,56 @@ export function initializeWalletConnect(store) {
   startConnectionStatusChecker(store)
 
   return {
-    async connect() {
+    async connect(onModalOpen) {
       // Prevent multiple simultaneous connections
       if (isConnecting) {
-        console.log('Connection already in progress, returning existing promise')
+        console.log('[WC TIMING] Connection already in progress, returning existing promise')
         return connectionPromise
       }
 
+      const connectStart = performance.now()
+      console.log('[WC TIMING] === Connection started ===')
+
       isConnecting = true
-      connectionPromise = this._performConnection(store)
+      connectionPromise = this._performConnection(store, connectStart, onModalOpen)
 
       try {
         const result = await connectionPromise
+        const totalTime = performance.now() - connectStart
+        console.log(`[WC TIMING] === Connection completed in ${totalTime.toFixed(2)}ms ===`)
         return result
+      } catch (err) {
+        const totalTime = performance.now() - connectStart
+        console.log(`[WC TIMING] === Connection failed after ${totalTime.toFixed(2)}ms ===`)
+        throw err
       } finally {
         isConnecting = false
         connectionPromise = null
       }
     },
 
-    async _performConnection(store) {
+    async _performConnection(store, connectStart, onModalOpen) {
       if (!store) return null
 
+      const stepStart = performance.now()
       try {
+        console.log('[WC TIMING] Step 1: Getting SignClient...')
         const client = await getSignClient(store)
+        console.log(
+          `[WC TIMING] Step 1: SignClient ready (${(performance.now() - stepStart).toFixed(2)}ms)`,
+        )
 
-        // Clean up stale sessions first
+        // Quick cleanup of current session only (not all sessions)
+        console.log('[WC TIMING] Step 2: Cleaning up stale sessions...')
+        const cleanupStart = performance.now()
         await cleanupStaleSessions(client, store)
+        console.log(
+          `[WC TIMING] Step 2: Cleanup done (${(performance.now() - cleanupStart).toFixed(2)}ms)`,
+        )
 
+        // Check for existing valid session
+        console.log('[WC TIMING] Step 3: Checking existing sessions...')
+        const checkStart = performance.now()
         const existingSessions = client.session.getAll()
         const bchSession = existingSessions.find((s) => s.namespaces?.bch?.accounts?.length)
         if (bchSession) {
@@ -395,46 +416,57 @@ export function initializeWalletConnect(store) {
           const hasRequiredMethods = REQUIRED_METHODS.every((m) => methods.includes(m))
 
           if (hasRequiredMethods && bchSession.expiry * 1000 > Date.now()) {
+            console.log(
+              `[WC TIMING] Step 3: Found existing valid session (${(performance.now() - checkStart).toFixed(2)}ms)`,
+            )
             currentSession = bchSession
+            console.log('[WC TIMING] Step 4: Syncing existing session to store...')
+            const syncStart = performance.now()
             await syncSessionToStore(store, client, currentSession)
+            console.log(
+              `[WC TIMING] Step 4: Session synced (${(performance.now() - syncStart).toFixed(2)}ms)`,
+            )
+            const totalTime = performance.now() - connectStart
+            console.log(
+              `[WC TIMING] === TOTAL: ${totalTime.toFixed(2)}ms (using existing session) ===`,
+            )
             return store.state.wallet?.address ?? null
           } else {
-            // Disconnect invalid session
-            try {
-              await client.disconnect({ topic: bchSession.topic })
-            } catch {
-              // ignore disconnect errors for stale sessions
-            }
+            console.log(
+              `[WC TIMING] Step 3: Session invalid or expired (${(performance.now() - checkStart).toFixed(2)}ms)`,
+            )
+            // Disconnect invalid session - fire and forget
+            client.disconnect({ topic: bchSession.topic }).catch(() => {})
           }
         }
 
         // Create new connection
+        console.log('[WC TIMING] Step 4: Creating new WalletConnect session...')
+        const connectStartTime = performance.now()
         const { uri, approval } = await client.connect({
           requiredNamespaces: REQUIRED_NAMESPACES,
           optionalNamespaces: OPTIONAL_NAMESPACES,
         })
+        console.log(
+          `[WC TIMING] Step 4: Session created, URI generated (${(performance.now() - connectStartTime).toFixed(2)}ms)`,
+        )
 
         const wcModal = getModal()
 
-        // Enhanced QR code display with error handling
+        // Fast modal opening - no artificial delays
         if (uri) {
           try {
-            // Add small delay to ensure modal is ready
-            await new Promise((resolve) => setTimeout(resolve, 100))
-            await wcModal.openModal({ uri })
-
-            // Add timeout for QR code display
-            const qrTimeout = setTimeout(() => {
-              console.warn('QR code display timeout, attempting to reopen modal')
-              wcModal.closeModal()
-              setTimeout(() => wcModal.openModal({ uri }), 500)
-            }, 5000)
-
-            // Clear timeout when modal is closed
-            const originalCloseModal = wcModal.closeModal
-            wcModal.closeModal = function (...args) {
-              clearTimeout(qrTimeout)
-              return originalCloseModal.apply(this, args)
+            console.log('[WC TIMING] Step 5: Opening modal...')
+            const modalStart = performance.now()
+            // Open modal immediately without delay
+            wcModal.openModal({ uri })
+            console.log(
+              `[WC TIMING] Step 5: Modal opened (${(performance.now() - modalStart).toFixed(2)}ms)`,
+            )
+            // Notify UI that modal is open - clear loading state
+            if (onModalOpen) {
+              console.log('[WC TIMING] Notifying UI: Modal is open, clearing loading state')
+              onModalOpen()
             }
           } catch (modalError) {
             console.error('Failed to open WalletConnect modal:', modalError)
@@ -442,55 +474,57 @@ export function initializeWalletConnect(store) {
           }
         }
 
+        // Wait for user approval - this resolves when wallet connects
+        console.log('[WC TIMING] Step 6: Waiting for wallet approval (QR scan)...')
+        const approvalStart = performance.now()
         const session = await approval()
+        const approvalTime = performance.now() - approvalStart
+        console.log(`[WC TIMING] Step 6: Wallet approved connection (${approvalTime.toFixed(2)}ms)`)
 
-        // Ensure modal is properly closed
-        if (wcModal && typeof wcModal.closeModal === 'function') {
-          wcModal.closeModal()
-        }
+        // Close modal immediately upon approval - no delay
+        const closeStart = performance.now()
+        wcModal.closeModal()
+        console.log(
+          `[WC TIMING] Step 7: Modal closed (${(performance.now() - closeStart).toFixed(2)}ms)`,
+        )
 
         currentSession = session
+        console.log('[WC TIMING] Step 8: Syncing new session to store...')
+        const syncStart = performance.now()
         await syncSessionToStore(store, client, session)
+        console.log(
+          `[WC TIMING] Step 8: Session synced to store (${(performance.now() - syncStart).toFixed(2)}ms)`,
+        )
+
+        const totalTime = performance.now() - connectStart
+        console.log(`[WC TIMING] === TOTAL: ${totalTime.toFixed(2)}ms (new connection) ===`)
         return store.state.wallet?.address ?? null
       } catch (err) {
-        // Enhanced error handling and cleanup
-        const m = getModal()
-        if (m && typeof m.closeModal === 'function') {
+        // Fast cleanup - close modal immediately on error
+        try {
+          getModal().closeModal()
+        } catch {
+          // Ignore close errors
+        }
+
+        // Only disconnect if we have a current session
+        if (currentSession) {
           try {
-            m.closeModal()
-          } catch (closeError) {
-            console.warn('Failed to close modal:', closeError)
+            await this.disconnect()
+          } catch {
+            // Ignore disconnect errors
           }
         }
 
-        try {
-          await this.disconnect()
-        } catch {
-          // ignore disconnect errors during recovery
-        }
-
-        // Enhanced error logging
-        console.error('WalletConnect connection error:', {
-          message: err?.message,
-          code: err?.code,
-          data: err?.data,
-          stack: err?.stack,
-        })
+        // Minimal error logging
+        console.error('WalletConnect connection error:', err?.message || err)
 
         throw err
       }
     },
 
     async disconnect() {
-      try {
-        if (signClient && currentSession?.topic) {
-          await signClient.disconnect({ topic: currentSession.topic })
-        }
-      } catch (e) {
-        console.debug('WalletConnect disconnect ignored:', e)
-      }
-
-      // Clear ALL state
+      // Clear state immediately for responsive UI
       currentSession = null
       isConnecting = false
       connectionPromise = null
@@ -499,8 +533,16 @@ export function initializeWalletConnect(store) {
         store.commit('wallet/CLEAR_WALLET')
       }
 
-      // Stop the connection status checker when disconnected
+      // Stop the connection status checker
       stopConnectionStatusChecker()
+
+      // Fire and forget disconnect - don't wait for network
+      if (signClient) {
+        const sessionTopic = currentSession?.topic
+        if (sessionTopic) {
+          signClient.disconnect({ topic: sessionTopic }).catch(() => {})
+        }
+      }
     },
 
     isConnected() {
@@ -533,6 +575,7 @@ export function initializeWalletConnect(store) {
         throw new Error('Wallet not connected. Connect Paytaca first.')
       }
       const chainId = currentSession.namespaces?.bch?.chains?.[0] ?? BCH_CHIPNET_CHAIN
+      console.log('session', currentSession)
       return await client.request({
         chainId,
         topic: currentSession.topic,
@@ -547,107 +590,66 @@ export function initializeWalletConnect(store) {
 }
 
 async function syncSessionToStore(store, client, session) {
+  const syncStart = performance.now()
   const chainId = session.namespaces?.bch?.chains?.[0] ?? BCH_CHIPNET_CHAIN
 
-  // Validate chain ID matches expected network
-  console.log('DEBUG: WalletConnect session chain ID:', chainId)
-  console.log('DEBUG: Expected chain IDs:', [
-    BCH_CHIPNET_CHAIN,
-    BCH_TESTNET_CHAIN,
-    BCH_MAINNET_CHAIN,
-  ])
+  console.log('[WC TIMING] syncSessionToStore: Starting...')
 
   try {
+    console.log('[WC TIMING] syncSessionToStore: Requesting bch_getAddresses...')
+    const addrStart = performance.now()
     const addresses = await client.request({
       chainId,
       topic: session.topic,
       request: { method: 'bch_getAddresses', params: {} },
     })
     const address = Array.isArray(addresses) && addresses.length ? addresses[0] : null
-
-    console.log('DEBUG: Retrieved wallet address:', address)
+    console.log(
+      `[WC TIMING] syncSessionToStore: bch_getAddresses took ${(performance.now() - addrStart).toFixed(2)}ms`,
+    )
 
     // Try to extract public key from session accounts or request it
     let publicKey = null
-    try {
-      // Check if public key is in session accounts (format: "bch:chainId:address" or similar)
-      const accounts = session.namespaces?.bch?.accounts ?? []
-      console.log('DEBUG: Session accounts:', accounts)
-
-      // Some wallets provide public key in account metadata
-      if (accounts.length > 0 && accounts[0].includes(':')) {
-        // Account format might contain public key info, but typically we need to request it
-        // Paytaca may provide it via a separate method or in session metadata
-      }
-
-      // Try requesting public key if Paytaca supports it (some wallets do)
-      // Note: This is optional - if not supported, we'll proceed with address only
+    if (address) {
       try {
+        console.log('[WC TIMING] syncSessionToStore: Requesting bch_getPublicKey...')
+        const pkStart = performance.now()
         const pubKeyResult = await client.request({
           chainId,
           topic: session.topic,
           request: { method: 'bch_getPublicKey', params: {} },
         })
-        console.log('DEBUG: Public key result:', pubKeyResult)
+        console.log(
+          `[WC TIMING] syncSessionToStore: bch_getPublicKey took ${(performance.now() - pkStart).toFixed(2)}ms`,
+        )
         if (pubKeyResult && typeof pubKeyResult === 'string') {
           publicKey = pubKeyResult
-          console.log('DEBUG: Retrieved public key from wallet')
         }
-      } catch (pubKeyError) {
-        console.log('DEBUG: bch_getPublicKey not supported:', pubKeyError.message)
+      } catch {
+        console.log('[WC TIMING] syncSessionToStore: bch_getPublicKey not supported (optional)')
         // Method not supported - that's okay, we'll work with address only
       }
-    } catch (error) {
-      console.warn('DEBUG: Public key extraction failed:', error.message)
-      // Public key extraction failed - continue with address only
     }
 
     if (address) {
-      // Validate address format matches chain ID
-      const addressNetwork = inferNetworkFromAddress(address)
-      const expectedNetwork = getNetworkFromChainId(chainId)
-
-      console.log('DEBUG: Address network inference:', addressNetwork)
-      console.log('DEBUG: Expected network from chain ID:', expectedNetwork)
-
-      if (addressNetwork !== expectedNetwork) {
-        console.warn('DEBUG: Network mismatch detected', {
-          address,
-          addressNetwork,
-          expectedNetwork,
-          chainId,
-        })
-      }
-
+      const commitStart = performance.now()
       store.commit('wallet/SET_WALLET', {
         address,
         publicKey,
         privateKey: null,
       })
-
-      console.log('DEBUG: Wallet state updated successfully')
+      console.log(
+        `[WC TIMING] syncSessionToStore: Store commit took ${(performance.now() - commitStart).toFixed(2)}ms`,
+      )
+      console.log(
+        `[WC TIMING] syncSessionToStore: TOTAL ${(performance.now() - syncStart).toFixed(2)}ms`,
+      )
     } else {
       console.warn('DEBUG: No address retrieved from wallet')
     }
   } catch (e) {
     console.warn('WalletConnect: could not get addresses', e)
   }
-}
-
-function inferNetworkFromAddress(address) {
-  if (typeof address !== 'string') return 'chipnet'
-  const prefix = address.includes(':') ? address.split(':')[0] : null
-  if (prefix === 'bitcoincash') return 'mainnet'
-  if (prefix === 'bchtest') return 'chipnet' // Assume chipnet for bchtest
-  if (prefix === 'chipnet') return 'chipnet'
-  return 'chipnet'
-}
-
-function getNetworkFromChainId(chainId) {
-  if (chainId === BCH_MAINNET_CHAIN) return 'mainnet'
-  if (chainId === BCH_CHIPNET_CHAIN) return 'chipnet'
-  if (chainId === BCH_TESTNET_CHAIN) return 'chipnet' // Map testnet to chipnet for our app
-  return 'chipnet'
 }
 
 async function restoreSessionIfAny(store) {

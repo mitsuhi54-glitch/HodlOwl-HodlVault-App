@@ -205,7 +205,12 @@ export default defineComponent({
         if (!this.$walletConnect) {
           throw new Error('WalletConnect not initialized')
         }
-        await this.$walletConnect.connect()
+        // Pass callback to clear loading state as soon as QR modal opens
+        await this.$walletConnect.connect(() => {
+          // Modal is open - clear button loading state immediately
+          console.log('[MainLayout] QR modal opened, clearing loading state')
+          this.connecting = false
+        })
         this.$q.notify({
           type: 'positive',
           message: 'Connected to Paytaca',

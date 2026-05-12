@@ -169,6 +169,19 @@ export const vaultApi = {
     const response = await apiClient.get(`/vaults/contract/${contractAddress}`)
     return response.data
   },
+
+  /**
+   * Toggle auto-withdrawal for a vault
+   * @param {string} id - Vault ID
+   * @param {boolean} autoWithdrawal - Enable/disable auto-withdrawal
+   * @returns {Promise<Object>} Updated vault
+   */
+  async toggleAutoWithdrawal(id, autoWithdrawal) {
+    const response = await apiClient.put(`/vaults/${id}/auto-withdrawal`, {
+      autoWithdrawal,
+    })
+    return response.data
+  },
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   updateVaultBalance,
   getVaultStats,
   getVaultByContractAddress,
+  toggleAutoWithdrawal,
 } from '../controllers/vault.controller.js'
 
 const router = Router()
@@ -96,5 +97,15 @@ router.put('/:address/balance', updateVaultBalance)
  * @param   contractAddress - Contract address
  */
 router.get('/contract/:contractAddress', getVaultByContractAddress)
+
+/**
+ * @route   PUT /api/v1/vaults/:id/auto-withdrawal
+ * @desc    Toggle auto-withdrawal for a vault
+ * @access  Wallet-based
+ * @header  x-wallet-address - Wallet address
+ * @param   id - Vault ID
+ * @body    autoWithdrawal - Boolean (true to enable, false to disable)
+ */
+router.put('/:id/auto-withdrawal', toggleAutoWithdrawal)
 
 export default router

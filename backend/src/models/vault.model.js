@@ -42,11 +42,6 @@ const vaultSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    vaultSalt: {
-      type: String,
-      required: true,
-      trim: true,
-    },
     name: {
       type: String,
       trim: true,

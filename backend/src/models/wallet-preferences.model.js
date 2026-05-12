@@ -10,6 +10,10 @@ const walletPreferencesSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    oneSignalPlayerId: {
+      type: String,
+      default: null,
+    },
     preferences: {
       autoWithdrawal: {
         type: Boolean,

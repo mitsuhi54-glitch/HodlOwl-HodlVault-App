@@ -509,10 +509,7 @@ export default defineComponent({
 
         // ✅ Check if we have all required fields
         const hasRequiredFields =
-          vaultData.ownerPkhHex &&
-          vaultData.oraclePkHex &&
-          vaultData.priceTargetCents &&
-          vaultData.vaultSalt
+          vaultData.ownerPkhHex && vaultData.oraclePkHex && vaultData.priceTargetCents
 
         if (!hasRequiredFields && vaultData.contractAddress) {
           console.log('⚠️ Incomplete vault data, fetching from backend...')
@@ -541,7 +538,7 @@ export default defineComponent({
           vaultData.ownerPkhHex,
           vaultData.oraclePkHex,
           vaultData.priceTargetCents,
-          vaultData.vaultSalt,
+          vaultData.walletAddress,
         )
 
         // Compute priceTarget (dollars) from priceTargetCents for display

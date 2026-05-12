@@ -405,7 +405,7 @@ export default defineComponent({
           vaultData.ownerPkhHex,
           vaultData.oraclePkHex,
           vaultData.priceTargetCents,
-          vaultData.vaultSalt, // Use stored salt
+          vaultData.walletAddress, // Use stored wallet address
         )
 
         this.vault = {
@@ -420,7 +420,6 @@ export default defineComponent({
           oraclePkHex: vaultData.oraclePkHex,
           contract,
           originalFundingAddress: vaultData.originalFundingAddress,
-          vaultSalt: vaultData.vaultSalt, // Store salt for later use
         }
 
         // Update form with vault data
@@ -512,21 +511,18 @@ export default defineComponent({
           return
         }
 
-        // Generate unique salt for this vault
-        const vaultSalt = vaultStorage.generateVaultSalt()
-
         const contractAddress = await calculateContractAddress(
           ownerPkhHex,
           ORACLE_PUBKEY, // Use Oracles.cash public key
           priceTargetCents,
-          vaultSalt, // Include salt for uniqueness
+          this.walletAddress, // Include salt for uniqueness
         )
 
         const contract = initializeHodlVaultContract(
           ownerPkhHex,
           oraclePkHex,
           priceTargetCents,
-          vaultSalt,
+          this.walletAddress,
         )
 
         // Get initial balance (should be 0 for new contract)
@@ -547,7 +543,6 @@ export default defineComponent({
           oraclePkHex: ORACLE_PUBKEY, // Use hardcoded Oracles.cash public key
           contract, // Store contract instance for withdrawal
           originalFundingAddress: this.walletAddress, // Store original funding address
-          vaultSalt, // Store the salt for contract recreation
         }
 
         // Save vault to multi-vault storage system
@@ -560,7 +555,6 @@ export default defineComponent({
           ownerPkhHex,
           oraclePkHex: ORACLE_PUBKEY, // Save Oracles.cash public key
           originalFundingAddress: this.walletAddress, // Save original funding address
-          vaultSalt, // Save the salt
           balance: Number(balance),
           createdAt: Date.now(),
           name: vaultName, // Use the same name
@@ -575,7 +569,6 @@ export default defineComponent({
 
         console.log('Vault created. Contract address:', contractAddress)
         console.log('To lock funds, send', this.form.amount, 'satoshis to:', contractAddress)
-        console.log('Vault salt:', vaultSalt)
 
         // Auto-withdrawal is handled server-side — just pass the flag to vaultStorage
 

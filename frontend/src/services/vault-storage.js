@@ -46,17 +46,6 @@ class VaultStorageService {
   }
 
   /**
-   * Generate a unique salt for contract address uniqueness
-   * @returns {string} 64-character hex string
-   */
-  generateVaultSalt() {
-    const salt = crypto.getRandomValues(new Uint8Array(32))
-    return Array.from(salt)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-  }
-
-  /**
    * Save a new vault to storage
    * @param {Object} vaultData - Vault information
    * @param {string} vaultData.walletAddress - Owner's wallet address
@@ -66,7 +55,6 @@ class VaultStorageService {
    * @param {string} vaultData.ownerPkhHex - Owner's public key hash
    * @param {string} vaultData.oraclePkHex - Oracle public key
    * @param {string} vaultData.originalFundingAddress - Original funding address
-   * @param {string} [vaultData.vaultSalt] - Unique salt for contract address
    * @param {string} [vaultData.name] - Vault name
    */
   async saveVault(vaultData) {
@@ -78,7 +66,6 @@ class VaultStorageService {
       hasOwnerPkhHex: !!vaultData.ownerPkhHex,
       hasOraclePkHex: !!vaultData.oraclePkHex,
       hasOriginalFundingAddress: !!vaultData.originalFundingAddress,
-      hasVaultSalt: !!vaultData.vaultSalt,
     })
 
     // Always try backend first if enabled, fallback on error
@@ -120,9 +107,8 @@ class VaultStorageService {
     try {
       const vaults = this.getAllVaults()
 
-      // Generate unique ID and salt if not provided
+      // Generate unique ID if not provided
       const vaultId = vaultData.id || this.generateVaultId()
-      const vaultSalt = vaultData.vaultSalt || this.generateVaultSalt()
 
       // Check if vault with same contract address already exists
       const existingIndex = vaults.findIndex((v) => v.contractAddress === vaultData.contractAddress)
@@ -136,7 +122,6 @@ class VaultStorageService {
       const vault = {
         ...vaultData,
         id: vaultId,
-        vaultSalt,
         priceTargetCents,
         createdAt: vaultData.createdAt || Date.now(),
         updatedAt: Date.now(),
@@ -353,6 +338,35 @@ class VaultStorageService {
   }
 
   // Note: logDepositActivity removed - backend handles all deposit logging via SSE
+
+  /**
+   * Update vault properties
+   * @param {string} contractAddress - Contract address of the vault to update
+   * @param {Object} updates - Object containing properties to update
+   */
+  async updateVault(contractAddress, updates) {
+    const vaults = this.getAllVaultsLocal()
+    const vaultIndex = vaults.findIndex((v) => v.contractAddress === contractAddress)
+
+    if (vaultIndex >= 0) {
+      // Merge updates into existing vault
+      vaults[vaultIndex] = {
+        ...vaults[vaultIndex],
+        ...updates,
+        updatedAt: Date.now(),
+      }
+
+      localStorage.setItem(this.storageKey, JSON.stringify(vaults))
+      console.log('Vault updated in localStorage:', {
+        contractAddress,
+        updates,
+      })
+      return vaults[vaultIndex]
+    }
+
+    console.warn('Vault not found for update:', contractAddress)
+    return null
+  }
 
   /**
    * Delete a vault
