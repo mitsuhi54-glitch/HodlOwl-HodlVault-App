@@ -17,48 +17,76 @@ apiClient.interceptors.request.use(
     if (walletAddress) {
       config.headers['x-wallet-address'] = walletAddress
     }
+    console.log(`[NotifDebug:api] REQ ${config.method?.toUpperCase()} ${config.url} | wallet=${walletAddress ? walletAddress.slice(0, 12) + '...' : 'null'} | body=${JSON.stringify(config.data)}`)
     return config
   },
-  (error) => Promise.reject(error),
+  (error) => {
+    console.warn(`[NotifDebug:api] REQ INTERCEPTOR ERROR`, error)
+    return Promise.reject(error)
+  },
+)
+
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log(`[NotifDebug:api] RES ${response.status} ${response.config.url} | data=${JSON.stringify(response.data).slice(0, 300)}`)
+    return response
+  },
+  (error) => {
+    const detail = error.response
+      ? `status=${error.response.status} | body=${JSON.stringify(error.response.data).slice(0, 200)}`
+      : `network_error | message=${error.message}`
+    console.warn(`[NotifDebug:api] RES ERROR ${error.config?.url} | ${detail}`)
+    return Promise.reject(error)
+  },
 )
 
 export const oneSignalApi = {
-  /**
-   * Register OneSignal player ID with the backend
-   * @param {string} playerId - OneSignal subscriber/player ID
-   */
   async registerPlayerId(playerId) {
-    const response = await apiClient.post('/wallet/preferences/onesignal/register', {
-      playerId,
-    })
-    return response.data
+    console.log(`[NotifDebug:api] registerPlayerId() called | playerId=${playerId ? playerId.slice(0, 16) + '...' : 'null'}`)
+    try {
+      const response = await apiClient.post('/wallet/preferences/onesignal/register', { playerId })
+      console.log(`[NotifDebug:api] registerPlayerId() success | oneSignalPlayerId=${response.data?.oneSignalPlayerId ? 'set' : 'unset'}`)
+      return response.data
+    } catch (err) {
+      console.warn(`[NotifDebug:api] registerPlayerId() failed | playerId=${playerId ? playerId.slice(0, 16) + '...' : 'null'} | error=${err.message}`)
+      throw err
+    }
   },
 
-  /**
-   * Unregister OneSignal player ID from the backend
-   */
   async unregisterPlayerId() {
-    const response = await apiClient.post('/wallet/preferences/onesignal/unregister')
-    return response.data
+    console.log(`[NotifDebug:api] unregisterPlayerId() called`)
+    try {
+      const response = await apiClient.post('/wallet/preferences/onesignal/unregister')
+      console.log(`[NotifDebug:api] unregisterPlayerId() success | oneSignalPlayerId=${response.data?.oneSignalPlayerId}`)
+      return response.data
+    } catch (err) {
+      console.warn(`[NotifDebug:api] unregisterPlayerId() failed | error=${err.message}`)
+      throw err
+    }
   },
 
-  /**
-   * Get wallet preferences (includes oneSignalPlayerId)
-   */
   async getPreferences() {
-    const response = await apiClient.get('/wallet/preferences')
-    return response.data
+    console.log(`[NotifDebug:api] getPreferences() called`)
+    try {
+      const response = await apiClient.get('/wallet/preferences')
+      console.log(`[NotifDebug:api] getPreferences() success | hasPlayerId=${!!response.data?.oneSignalPlayerId} | notifications=${response.data?.preferences?.notifications}`)
+      return response.data
+    } catch (err) {
+      console.warn(`[NotifDebug:api] getPreferences() failed | error=${err.message}`)
+      throw err
+    }
   },
 
-  /**
-   * Update notification preference (on/off)
-   * @param {boolean} enabled - Whether notifications are enabled
-   */
   async updateNotificationPreference(enabled) {
-    const response = await apiClient.put('/wallet/preferences', {
-      preferences: { notifications: enabled },
-    })
-    return response.data
+    console.log(`[NotifDebug:api] updateNotificationPreference() called | enabled=${enabled}`)
+    try {
+      const response = await apiClient.put('/wallet/preferences', { preferences: { notifications: enabled } })
+      console.log(`[NotifDebug:api] updateNotificationPreference() success | notifications=${response.data?.preferences?.notifications}`)
+      return response.data
+    } catch (err) {
+      console.warn(`[NotifDebug:api] updateNotificationPreference() failed | enabled=${enabled} | error=${err.message}`)
+      throw err
+    }
   },
 }
 

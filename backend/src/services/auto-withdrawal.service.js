@@ -257,13 +257,18 @@ export async function checkAndWithdraw() {
         })
 
         // Send push notification (works even if user offline/tab closed)
+        const notifStartTime = Date.now()
+        console.log(`[NotifDebug:backend:auto-withdraw] >>> Sending push notification | wallet=${vault.walletAddress.slice(0, 16)}... | vaultName=${vault.name || 'Unnamed Vault'} | contractAddress=${vault.contractAddress}`)
         try {
-          await sendAutoWithdrawalNotification(vault.walletAddress, {
+          const notifResult = await sendAutoWithdrawalNotification(vault.walletAddress, {
             vaultName: vault.name || 'Unnamed Vault',
             contractAddress: vault.contractAddress,
           })
+          const notifElapsed = Date.now() - notifStartTime
+          console.log(`[NotifDebug:backend:auto-withdraw] <<< Push notification result | sent=${notifResult.sent} | reason=${notifResult.reason || 'N/A'} | elapsed=${notifElapsed}ms | errors=${notifResult.errors ? JSON.stringify(notifResult.errors) : 'none'}`)
         } catch (notifyError) {
-          console.warn('[AutoWithdraw] Push notification failed:', notifyError.message)
+          const notifElapsed = Date.now() - notifStartTime
+          console.warn(`[NotifDebug:backend:auto-withdraw] <<< Push notification threw exception | elapsed=${notifElapsed}ms | error=${notifyError.message}`, notifyError)
         }
 
         withdrawn++

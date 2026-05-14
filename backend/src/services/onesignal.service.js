@@ -1,48 +1,62 @@
-/**
- * OneSignal Push Notification Service
- * Sends web push notifications to users when auto-withdrawal occurs.
- * Uses OneSignal REST API v1 for server-side notification delivery.
- */
-
 import { WalletPreferences } from '../models/wallet-preferences.model.js'
 
-const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID
-const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY
 const ONESIGNAL_API_URL = 'https://onesignal.com/api/v1/notifications'
+function getAppId() { return process.env.ONESIGNAL_APP_ID }
+function getApiKey() { return process.env.ONESIGNAL_REST_API_KEY }
 
-/**
- * Send auto-withdrawal push notification to a user
- * @param {string} walletAddress - User's wallet address
- * @param {object} data - { vaultName, contractAddress }
- * @returns {Promise<{sent: boolean, reason?: string, result?: object}>}
- */
+function log(tag, msg, data) {
+  const prefix = `[NotifDebug:backend:onesignal-svc]`
+  if (data !== undefined) {
+    console.log(`${prefix} ${tag} — ${msg}`, data)
+  } else {
+    console.log(`${prefix} ${tag} — ${msg}`)
+  }
+}
+
+function warn(tag, msg, err) {
+  console.warn(`[NotifDebug:backend:onesignal-svc] ${tag} — ${msg}`, err || '')
+}
+
 export async function sendAutoWithdrawalNotification(walletAddress, data) {
+  const startTime = Date.now()
+  log('SEND', `>>> ENTER sendAutoWithdrawalNotification | wallet=${walletAddress ? walletAddress.slice(0, 16) + '...' : 'null'} | vaultName=${data?.vaultName || 'null'} | contractAddress=${data?.contractAddress || 'null'}`)
+
   try {
-    // 1. Validate OneSignal config
-    if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
-      console.warn('[OneSignal] Missing ONESIGNAL_APP_ID or ONESIGNAL_REST_API_KEY in env')
+    const appId = getAppId()
+    const apiKey = getApiKey()
+    log('SEND', 'Step 1 — Checking OneSignal config from env')
+    log('SEND', `ONESIGNAL_APP_ID set=${!!appId} | ONESIGNAL_REST_API_KEY set=${!!apiKey} | key_prefix=${apiKey ? apiKey.slice(0, 15) + '...' : 'EMPTY'}`)
+
+    if (!appId || !apiKey) {
+      warn('SEND', `Missing config | APP_ID=${!!appId} | API_KEY=${!!apiKey}`)
       return { sent: false, reason: 'missing_config' }
     }
 
-    // 2. Check if user has notifications enabled
+    log('SEND', `Step 2 — Looking up wallet preferences for ${walletAddress.slice(0, 16)}...`)
     const prefs = await WalletPreferences.findByWalletAddress(walletAddress)
-    if (!prefs || !prefs.preferences.notifications) {
-      console.log('[OneSignal] Notifications disabled for', walletAddress)
+    if (!prefs) {
+      log('SEND', `No preferences document found for wallet`)
+      return { sent: false, reason: 'disabled' }
+    }
+    log('SEND', `Preferences found | notifications=${prefs.preferences?.notifications} | oneSignalPlayerId=${prefs.oneSignalPlayerId ? prefs.oneSignalPlayerId.slice(0, 16) + '...' : 'null'}`)
+
+    if (!prefs.preferences.notifications) {
+      log('SEND', 'User has notifications preference set to false — skipping')
       return { sent: false, reason: 'disabled' }
     }
 
-    // 3. Get player ID
     const playerId = prefs.oneSignalPlayerId
     if (!playerId) {
-      console.log('[OneSignal] No player ID for', walletAddress)
+      log('SEND', 'No OneSignal player ID registered for this wallet — skipping')
       return { sent: false, reason: 'no_player_id' }
     }
 
-    // 4. Send notification via OneSignal REST API
+    const appUrl = process.env.APP_URL || 'http://localhost:9001'
+
     const notificationPayload = {
-      app_id: ONESIGNAL_APP_ID,
+      app_id: appId,
       include_player_ids: [playerId],
-      headings: { en: '🎉 Vault Auto-Withdrawn' },
+      headings: { en: 'Vault Auto-Withdrawn' },
       contents: {
         en: `Your "${data.vaultName || 'Unnamed Vault'}" vault was automatically withdrawn.`,
       },
@@ -50,43 +64,48 @@ export async function sendAutoWithdrawalNotification(walletAddress, data) {
         type: 'AUTO_WITHDRAWAL',
         contractAddress: data.contractAddress,
       },
-      web_url: '/#/my-vaults',
+      web_url: `${appUrl}/#/my-vaults`,
     }
+
+    log('SEND', `Step 4 — POSTING to OneSignal API | URL=${ONESIGNAL_API_URL} | playerId=${playerId.slice(0, 16)}...`)
+    log('SEND', `Payload (sensitive fields masked): app_id=${appId.slice(0, 8)}... | include_player_ids=[${playerId.slice(0, 8)}...] | web_url=/${'#/my-vaults'} | data.type=AUTO_WITHDRAWAL`)
 
     const response = await fetch(ONESIGNAL_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+        Authorization: `Basic ${apiKey}`,
       },
       body: JSON.stringify(notificationPayload),
     })
 
+    log('SEND', `OneSignal API responded | status=${response.status} | statusText=${response.statusText}`)
+
     const result = await response.json()
+    log('SEND', `OneSignal API response body | id=${result.id || 'null'} | errors=${result.errors ? JSON.stringify(result.errors) : 'none'} | recipientCount=${result.recipient_count ?? 'N/A'}`)
 
     if (result.errors) {
-      console.warn('[OneSignal] API returned errors:', result.errors)
+      warn('SEND', `API returned errors: ${JSON.stringify(result.errors)}`)
       return { sent: false, reason: 'api_error', errors: result.errors }
     }
 
-    console.log('[OneSignal] Notification sent to', walletAddress, '- ID:', result.id)
+    const elapsed = Date.now() - startTime
+    log('SEND', `<<< EXIT sendAutoWithdrawalNotification SUCCESS | notificationId=${result.id} | elapsed=${elapsed}ms`)
     return { sent: true, result }
   } catch (error) {
-    console.error('[OneSignal] Failed to send notification:', error.message)
+    const elapsed = Date.now() - startTime
+    warn('SEND', `<<< EXIT sendAutoWithdrawalNotification EXCEPTION | elapsed=${elapsed}ms | error=${error.message}`, error)
     return { sent: false, reason: 'exception', error: error.message }
   }
 }
 
-/**
- * Register a OneSignal player ID for a wallet address
- * Called from the frontend when user subscribes to push notifications
- * @param {string} walletAddress - User's wallet address
- * @param {string} playerId - OneSignal player/subscriber ID
- * @returns {Promise<object>} Updated preferences
- */
 export async function registerPlayerId(walletAddress, playerId) {
+  const startTime = Date.now()
+  log('REG', `>>> ENTER registerPlayerId | wallet=${walletAddress ? walletAddress.slice(0, 16) + '...' : 'null'} | playerId=${playerId ? playerId.slice(0, 16) + '...' : 'null'}`)
+
   try {
     const normalizedAddress = walletAddress.toLowerCase()
+    log('REG', `Upserting WalletPreferences | address=${normalizedAddress.slice(0, 16)}... | setting oneSignalPlayerId=${playerId.slice(0, 16)}...`)
 
     const preferences = await WalletPreferences.findOneAndUpdate(
       { walletAddress: normalizedAddress },
@@ -94,22 +113,25 @@ export async function registerPlayerId(walletAddress, playerId) {
       { new: true, upsert: true, setDefaultsOnInsert: true },
     )
 
-    console.log('[OneSignal] Player ID registered for', walletAddress)
+    log('REG', `DB update result | exists=${!!preferences} | storedPlayerId=${preferences?.oneSignalPlayerId ? preferences.oneSignalPlayerId.slice(0, 16) + '...' : 'null'}`)
+
+    const elapsed = Date.now() - startTime
+    log('REG', `<<< EXIT registerPlayerId SUCCESS | elapsed=${elapsed}ms`)
     return preferences
   } catch (error) {
-    console.error('[OneSignal] Failed to register player ID:', error.message)
+    const elapsed = Date.now() - startTime
+    warn('REG', `<<< EXIT registerPlayerId FAILED | elapsed=${elapsed}ms | error=${error.message}`, error)
     throw error
   }
 }
 
-/**
- * Remove a OneSignal player ID (when user disables notifications)
- * @param {string} walletAddress - User's wallet address
- * @returns {Promise<object>} Updated preferences
- */
 export async function unregisterPlayerId(walletAddress) {
+  const startTime = Date.now()
+  log('UNREG', `>>> ENTER unregisterPlayerId | wallet=${walletAddress ? walletAddress.slice(0, 16) + '...' : 'null'}`)
+
   try {
     const normalizedAddress = walletAddress.toLowerCase()
+    log('UNREG', `Setting oneSignalPlayerId to null for ${normalizedAddress.slice(0, 16)}...`)
 
     const preferences = await WalletPreferences.findOneAndUpdate(
       { walletAddress: normalizedAddress },
@@ -117,10 +139,14 @@ export async function unregisterPlayerId(walletAddress) {
       { new: true },
     )
 
-    console.log('[OneSignal] Player ID removed for', walletAddress)
+    log('UNREG', `DB update result | found=${!!preferences} | playerIdNow=${preferences?.oneSignalPlayerId}`)
+
+    const elapsed = Date.now() - startTime
+    log('UNREG', `<<< EXIT unregisterPlayerId SUCCESS | elapsed=${elapsed}ms`)
     return preferences
   } catch (error) {
-    console.error('[OneSignal] Failed to unregister player ID:', error.message)
+    const elapsed = Date.now() - startTime
+    warn('UNREG', `<<< EXIT unregisterPlayerId FAILED | elapsed=${elapsed}ms | error=${error.message}`, error)
     throw error
   }
 }

@@ -553,6 +553,9 @@ export default defineComponent({
     // ✅ Check notification subscription status
     this.checkNotificationStatus()
 
+    // Re-check notification status when tab becomes visible (permission may have changed)
+    document.addEventListener('visibilitychange', this.onVisibilityChange)
+
     // Listen for vault withdrawal events
     window.addEventListener('vault-withdrawn', this.handleVaultWithdrawn)
 
@@ -566,6 +569,7 @@ export default defineComponent({
 
     // ✅ Disconnect SSE and remove event listeners
     disconnectSSE()
+    document.removeEventListener('visibilitychange', this.onVisibilityChange)
     window.removeEventListener('vault-withdrawn', this.handleVaultWithdrawn)
     window.removeEventListener('new-activity', this.handleNewActivity)
   },
@@ -575,21 +579,36 @@ export default defineComponent({
      * Toggle push notifications on/off
      */
     async toggleNotifications(enabled) {
+      console.log(`[NotifDebug:page] toggleNotifications() called | enabled=${enabled} | current_perm=${Notification.permission} | optIn_connected=${!!this.connectedAddress}`)
+      const startTime = Date.now()
+
       if (enabled) {
-        // Turn ON: request permission and subscribe
+        console.log(`[NotifDebug:page] Turning ON — calling requestNotificationPermission()`)
         const result = await requestNotificationPermission()
+        console.log(`[NotifDebug:page] requestNotificationPermission() returned | success=${result.success} | playerId=${result.playerId ? result.playerId.slice(0, 16) + '...' : 'null'} | error=${result.error || 'null'} | elapsed=${Date.now() - startTime}ms`)
+
         if (result.success) {
           this.notificationsEnabled = true
           this.notificationPermissionDenied = false
+          console.log(`[NotifDebug:page] Permission granted — updating backend preference to true`)
           await oneSignalApi.updateNotificationPreference(true)
           this.$q.notify({ type: 'positive', message: 'Push notifications enabled' })
         } else {
           this.notificationsEnabled = false
-          if (result.error === 'User denied permission' || result.error?.includes('denied')) {
+          const errMsg = (result.error || '').toLowerCase()
+          const isDenied = errMsg.includes('denied') || Notification.permission === 'denied'
+          const isTimeout = errMsg.includes('timeout')
+          console.log(`[NotifDebug:page] Permission result | errMsg=${result.error} | isDenied=${isDenied} | isTimeout=${isTimeout} | Notification.permission=${Notification.permission}`)
+          if (isDenied) {
             this.notificationPermissionDenied = true
             this.$q.notify({
               type: 'warning',
               message: 'Notification permission denied. Enable in browser settings.',
+            })
+          } else if (isTimeout) {
+            this.$q.notify({
+              type: 'warning',
+              message: 'Notification setup timed out. Please try again.',
             })
           } else {
             this.$q.notify({
@@ -599,8 +618,9 @@ export default defineComponent({
           }
         }
       } else {
-        // Turn OFF: unsubscribe
-        await unsubscribeFromNotifications()
+        console.log(`[NotifDebug:page] Turning OFF — calling unsubscribeFromNotifications()`)
+        const unsubResult = await unsubscribeFromNotifications()
+        console.log(`[NotifDebug:page] unsubscribeFromNotifications() returned | success=${unsubResult.success} | error=${unsubResult.error || 'null'} | elapsed=${Date.now() - startTime}ms`)
         this.notificationsEnabled = false
         this.$q.notify({ type: 'info', message: 'Push notifications disabled' })
       }
@@ -610,27 +630,49 @@ export default defineComponent({
      * Check current notification subscription status
      */
     async checkNotificationStatus() {
+      console.log(`[NotifDebug:page] checkNotificationStatus() called | Notification.permission=${Notification.permission} | connected=${!!this.connectedAddress}`)
       try {
-        // Check browser permission
         if (Notification.permission === 'denied') {
+          console.log(`[NotifDebug:page] Permission is denied — disabling`)
           this.notificationPermissionDenied = true
           this.notificationsEnabled = false
           return
         }
 
-        // Check OneSignal subscription
+        if (this.notificationPermissionDenied && Notification.permission === 'granted') {
+          console.log(`[NotifDebug:page] Permission was previously denied but now granted — resetting flag`)
+          this.notificationPermissionDenied = false
+        }
+
+        console.log(`[NotifDebug:page] Checking OneSignal subscription status`)
         const subscribed = await isNotificationSubscribed()
+        console.log(`[NotifDebug:page] isNotificationSubscribed() = ${subscribed}`)
         this.notificationsEnabled = subscribed
 
-        // Also check backend preference
         if (this.connectedAddress) {
+          console.log(`[NotifDebug:page] Fetching backend preferences`)
           const prefs = await oneSignalApi.getPreferences()
+          console.log(`[NotifDebug:page] Backend prefs | notifications=${prefs?.preferences?.notifications} | hasPlayerId=${!!prefs?.oneSignalPlayerId}`)
           if (prefs?.preferences?.notifications === false) {
+            console.log(`[NotifDebug:page] Backend says notifications disabled — overriding toggle to OFF`)
             this.notificationsEnabled = false
           }
         }
+
+        console.log(`[NotifDebug:page] checkNotificationStatus() final state | notificationsEnabled=${this.notificationsEnabled} | permissionDenied=${this.notificationPermissionDenied}`)
       } catch (err) {
-        console.warn('[Notifications] Status check failed:', err)
+        console.warn(`[NotifDebug:page] Status check failed: ${err.message}`, err)
+      }
+    },
+
+    /**
+     * Re-check notification status when tab becomes visible
+     */
+    onVisibilityChange() {
+      console.log(`[NotifDebug:page] visibilitychange | state=${document.visibilityState}`)
+      if (document.visibilityState === 'visible') {
+        console.log(`[NotifDebug:page] Tab became visible — re-checking notification status`)
+        this.checkNotificationStatus()
       }
     },
 
