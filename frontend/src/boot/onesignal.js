@@ -26,10 +26,10 @@ export default boot(({ app, router }) => {
   }
 
   const script = document.createElement('script')
-  script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'
+  script.src = '/OneSignalSDK.page.js'
   script.defer = true
-  script.onload = () => log('BOOT', 'SDK script loaded from CDN')
-  script.onerror = (err) => warn('BOOT', 'SDK script failed to load', err)
+  script.onload = () => log('BOOT', 'SDK script loaded from local /OneSignalSDK.page.js')
+  script.onerror = (err) => warn('BOOT', 'Local SDK script failed to load', err)
   document.head.appendChild(script)
   log('BOOT', 'SDK script element appended to head')
 
@@ -100,6 +100,37 @@ export default boot(({ app, router }) => {
       log('INIT', 'OneSignal SDK fully initialized and ready')
     } catch (err) {
       warn('INIT', `SDK initialization threw exception: ${err.message}`, err)
+    }
+
+    // Listen for foreground notifications (delivered via service worker postMessage)
+    try {
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener('message', async (event) => {
+          if (event.data?.type === 'ONESIGNAL_NOTIFICATION_RECEIVED') {
+            const payload = event.data.payload || {}
+            log('FG_NOTIF', `Foreground notification received | title=${payload.headings?.en || payload.title || 'N/A'} | body=${payload.contents?.en || payload.body || 'N/A'}`)
+            try {
+              const { Notify } = await import('quasar')
+              Notify.create({
+                type: 'positive',
+                message: payload.contents?.en || payload.body || 'Vault auto-withdrawn',
+                caption: payload.headings?.en || payload.title || 'Notification',
+                timeout: 6000,
+                actions: payload.data?.contractAddress
+                  ? [{ label: 'View', handler: () => router.push(`/vault/manage?contract=${encodeURIComponent(payload.data.contractAddress)}`) }]
+                  : [{ label: 'Open', handler: () => router.push('/my-vaults') }],
+              })
+            } catch {
+              log('FG_NOTIF', 'Quasar Notify unavailable — foreground notification suppressed by SDK')
+            }
+          }
+        })
+        log('INIT', 'Service worker message listener registered for foreground notifications')
+      } else {
+        log('INIT', 'Service worker not available — foreground notification listener skipped')
+      }
+    } catch (err) {
+      warn('INIT', 'Failed to register foreground notification listener', err)
     }
 
     app.config.globalProperties.$oneSignal = OneSignal
@@ -201,6 +232,13 @@ export async function requestNotificationPermission() {
       log('REQ_PERM', 'optIn() called — waiting for subscription (SUB_CHANGE handler will register with backend)')
       const result = await waitForSubscription()
       log('REQ_PERM', `waitForSubscription result: success=${result.success} | playerId=${result.playerId || 'null'} | error=${result.error || 'null'}`)
+      // Log push subscription details for delivery diagnostics
+      try {
+        const sub = await navigator.serviceWorker.ready.then(reg => reg.pushManager.getSubscription())
+        log('REQ_PERM', `Push subscription diagnostic | exists=${!!sub} | endpoint=${sub ? sub.endpoint.slice(0, 60) + '...' : 'null'} | expiration=${sub ? (sub.expirationTime ? new Date(sub.expirationTime).toISOString() : 'never') : 'N/A'}`)
+      } catch (e) {
+        log('REQ_PERM', `Push subscription diagnostic unavailable: ${e.message}`)
+      }
       return result
     }
 

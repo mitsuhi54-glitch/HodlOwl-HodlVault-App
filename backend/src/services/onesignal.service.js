@@ -82,15 +82,43 @@ export async function sendAutoWithdrawalNotification(walletAddress, data) {
     log('SEND', `OneSignal API responded | status=${response.status} | statusText=${response.statusText}`)
 
     const result = await response.json()
-    log('SEND', `OneSignal API response body | id=${result.id || 'null'} | errors=${result.errors ? JSON.stringify(result.errors) : 'none'} | recipientCount=${result.recipient_count ?? 'N/A'}`)
+    const notifId = result.id || result.notification_id
+    log('SEND', `OneSignal API response body | id=${notifId || 'null'} | fullResponse=${JSON.stringify(result)}`)
 
-    if (result.errors) {
+    if (result.errors && (Array.isArray(result.errors) ? result.errors.length > 0 : (result.errors.invalid_player_ids?.length > 0 || result.errors.invalid_external_user_ids?.length > 0))) {
       warn('SEND', `API returned errors: ${JSON.stringify(result.errors)}`)
+      const invalid = result.errors?.invalid_player_ids || []
+      if (invalid.length > 0 && invalid[0] === playerId) {
+        warn('SEND', `Player ID ${playerId.slice(0, 16)}... was rejected by OneSignal — push subscription invalid/expired`)
+      }
+      const elapsed = Date.now() - startTime
+      log('SEND', `<<< EXIT sendAutoWithdrawalNotification FAILED | elapsed=${elapsed}ms`)
       return { sent: false, reason: 'api_error', errors: result.errors }
     }
 
+    // v2 API create response does not include delivery metrics — poll notification status
+    if (notifId) {
+      try {
+        await new Promise(r => setTimeout(r, 500))
+        const statusRes = await fetch(`${ONESIGNAL_API_URL}/${notifId}?app_id=${appId}`, {
+          headers: { Authorization: `Basic ${apiKey}` },
+        })
+        const status = await statusRes.json()
+        log('SEND', `Delivery status poll | successful=${status.successful ?? 'N/A'} | failed=${status.failed ?? 'N/A'} | converted=${status.converted ?? 'N/A'} | remaining=${status.remaining ?? 'N/A'} | queued=${status.queued_at ? new Date(status.queued_at * 1000).toISOString() : 'N/A'} | completed=${status.completed_at ? new Date(status.completed_at * 1000).toISOString() : 'N/A'}`)
+        if ((status.successful ?? 0) === 0 && (status.failed ?? 0) > 0) {
+          warn('SEND', `Notification delivery FAILED for player ID ${playerId.slice(0, 16)}... | failed=${status.failed}`)
+        } else if ((status.successful ?? 0) === 0) {
+          warn('SEND', `Notification queued but 0 successful deliveries — player ID ${playerId.slice(0, 16)}... may not have an active push subscription | check OneSignal dashboard → Messages → ${notifId}`)
+        } else {
+          log('SEND', `Notification delivered to ${status.successful} recipient(s)`)
+        }
+      } catch (pollErr) {
+        warn('SEND', `Status poll failed (non-blocking): ${pollErr.message}`)
+      }
+    }
+
     const elapsed = Date.now() - startTime
-    log('SEND', `<<< EXIT sendAutoWithdrawalNotification SUCCESS | notificationId=${result.id} | elapsed=${elapsed}ms`)
+    log('SEND', `<<< EXIT sendAutoWithdrawalNotification | notificationId=${notifId} | elapsed=${elapsed}ms`)
     return { sent: true, result }
   } catch (error) {
     const elapsed = Date.now() - startTime
