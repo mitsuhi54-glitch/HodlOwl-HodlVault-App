@@ -6,6 +6,10 @@ import {
   deleteWalletPreferences,
   registerOneSignalPlayer,
   unregisterOneSignalPlayer,
+  registerEmailAddress,
+  unregisterEmailAddress,
+  verifyEmailCodeHandler,
+  resendVerificationCodeHandler,
 } from '../controllers/wallet-preferences.controller.js'
 
 const router = Router()
@@ -52,5 +56,35 @@ router.post('/onesignal/register', registerOneSignalPlayer)
  * @access  Wallet-based
  */
 router.post('/onesignal/unregister', unregisterOneSignalPlayer)
+
+/**
+ * @route   POST /api/v1/wallet/preferences/email/register
+ * @desc    Register email address for email notifications
+ * @access  Wallet-based
+ * @body    email - Email address
+ */
+router.post('/email/register', registerEmailAddress)
+
+/**
+ * @route   POST /api/v1/wallet/preferences/email/unregister
+ * @desc    Unregister email address (disable email notifications)
+ * @access  Wallet-based
+ */
+router.post('/email/unregister', unregisterEmailAddress)
+
+/**
+ * @route   POST /api/v1/wallet/preferences/email/verify
+ * @desc    Verify email with 6-digit code
+ * @access  Wallet-based
+ * @body    code - 6-digit verification code
+ */
+router.post('/email/verify', verifyEmailCodeHandler)
+
+/**
+ * @route   POST /api/v1/wallet/preferences/email/resend
+ * @desc    Resend verification code
+ * @access  Wallet-based
+ */
+router.post('/email/resend', resendVerificationCodeHandler)
 
 export default router

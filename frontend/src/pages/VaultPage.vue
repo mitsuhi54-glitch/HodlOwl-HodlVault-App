@@ -138,6 +138,52 @@
                   </q-input>
                 </div>
 
+                <!-- Price Target Presets -->
+                <div v-if="currentBchPrice" class="q-mb-lg">
+                  <div class="text-caption text-grey-5 q-mb-sm">
+                    Quick select a target ratio:
+                  </div>
+                  <div class="row q-gutter-xs">
+                    <q-btn
+                      v-for="preset in priceTargetPresets"
+                      :key="preset.label"
+                      dense
+                      outline
+                      no-caps
+                      :color="preset.riskColor"
+                      class="col"
+                      :class="{ 'bg-grey-7 text-white': form.priceTarget === preset.targetPrice }"
+                      @click="form.priceTarget = preset.targetPrice"
+                    >
+                      <div class="column items-center q-py-xs">
+                        <span class="text-caption">{{ preset.label }}</span>
+                        <span class="text-weight-bold">+{{ preset.percent }}%</span>
+                        <span class="text-caption text-grey-5">₱{{ preset.formattedPrice }}</span>
+                      </div>
+                      <q-tooltip>
+                        <div class="text-center">
+                          <div class="text-weight-bold">{{ preset.label }}</div>
+                          <div>Target: +{{ preset.percent }}% from current price</div>
+                          <div class="text-caption">Price: ₱{{ preset.formattedPrice }}</div>
+                          <q-badge :color="preset.riskColor" class="q-mt-xs">Risk: {{ preset.riskLevel }}</q-badge>
+                        </div>
+                      </q-tooltip>
+                    </q-btn>
+                  </div>
+                  <div class="row q-mt-xs q-gutter-xs">
+                    <q-badge
+                      v-for="preset in priceTargetPresets"
+                      :key="'badge-' + preset.label"
+                      :color="preset.riskColor"
+                      class="col cursor-pointer"
+                      style="padding: 4px 0"
+                      @click="form.priceTarget = preset.targetPrice"
+                    >
+                      {{ preset.riskLevel }}
+                    </q-badge>
+                  </div>
+                </div>
+
                 <!-- Auto-Withdrawal Option -->
                 <div class="q-mb-lg">
                   <q-toggle
@@ -238,6 +284,7 @@ export default defineComponent({
   data() {
     return {
       form: {
+        // amount: null,
         priceTarget: null,
         vaultName: '',
       },
@@ -258,6 +305,9 @@ export default defineComponent({
         signature_hex: '',
         oracle_pubkey_hex: '',
       },
+
+      // Vault persistence (localStorage)
+      vaultPersistKey: 'hodl-vault-active-vault',
 
       // Original funding address for auto-withdrawal
       originalFundingAddress: '',
@@ -339,6 +389,25 @@ export default defineComponent({
       return null
     },
 
+    priceTargetPresets() {
+      if (!this.currentBchPrice) return []
+      const base = Number(this.currentBchPrice)
+      const presets = [
+        { label: 'Conservative', percent: 10, riskColor: 'positive', riskLevel: 'Low Risk', multiplier: 1.1 },
+        { label: 'Moderate', percent: 25, riskColor: 'warning', riskLevel: 'Medium Risk', multiplier: 1.25 },
+        { label: 'Ambitious', percent: 50, riskColor: 'orange', riskLevel: 'High Risk', multiplier: 1.5 },
+        { label: 'Aggressive', percent: 100, riskColor: 'negative', riskLevel: 'Very High Risk', multiplier: 2.0 },
+      ]
+      return presets.map((p) => ({
+        ...p,
+        targetPrice: Math.round(base * p.multiplier * 100) / 100,
+        formattedPrice: Number(Math.round(base * p.multiplier * 100) / 100).toLocaleString('en-PH', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+      }))
+    },
+
     developerChainId() {
       return this.$walletConnect && typeof this.$walletConnect.getChainId === 'function'
         ? this.$walletConnect.getChainId()
@@ -353,6 +422,38 @@ export default defineComponent({
   },
 
   methods: {
+    persistVaultState(vaultState) {
+      if (typeof localStorage === 'undefined') return
+      try {
+        if (!vaultState) {
+          localStorage.removeItem(this.vaultPersistKey)
+          return
+        }
+        localStorage.setItem(this.vaultPersistKey, JSON.stringify(vaultState))
+      } catch {
+        // ignore persistence errors
+      }
+    },
+
+    clearPersistedVaultState() {
+      if (typeof localStorage === 'undefined') return
+      try {
+        localStorage.removeItem(this.vaultPersistKey)
+      } catch {
+        // ignore persistence errors
+      }
+    },
+
+    loadPersistedVaultState() {
+      if (typeof localStorage === 'undefined') return null
+      try {
+        const stored = localStorage.getItem(this.vaultPersistKey)
+        return stored ? JSON.parse(stored) : null
+      } catch {
+        return null
+      }
+    },
+
     loadSelectedVault(vaultData) {
       try {
         // ✅ Defensive: Convert old priceTarget field to priceTargetCents if needed
@@ -439,6 +540,13 @@ export default defineComponent({
       }
     },
 
+    formatPrice(value) {
+      return Number(value).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    },
+
     async onLockFunds() {
       if (!this.canLockFunds) return
 
@@ -461,11 +569,25 @@ export default defineComponent({
           throw new Error('Oracle public key not loaded. Refresh the price first.')
         }
 
+        // Check for duplicate vault with same parameters
+        const existingVault = await vaultStorage.checkForDuplicateVault(
+          this.walletAddress,
+          this.developerPriceTargetCents, // Use cents for duplicate check
+        )
+        if (existingVault) {
+          this.$q.notify({
+            type: 'warning',
+            message: `You already have a vault with target price ₱${this.form.priceTarget}. Each vault must have a unique target price.`,
+            timeout: 5000,
+          })
+          return
+        }
+
         const contractAddress = await calculateContractAddress(
           ownerPkhHex,
-          ORACLE_PUBKEY, // Use Oracles.cash public key
+          ORACLE_PUBKEY,
           priceTargetCents,
-          this.walletAddress, // Include salt for uniqueness
+          this.walletAddress,
         )
 
         const contract = initializeHodlVaultContract(
@@ -699,6 +821,23 @@ export default defineComponent({
   },
 
   mounted() {
+    // Check if we're coming from vault management with a selected vault
+    const selectedVault = localStorage.getItem('hodl-vault-selected-vault')
+    if (selectedVault) {
+      try {
+        const vault = JSON.parse(selectedVault)
+        this.loadSelectedVault(vault)
+        localStorage.removeItem('hodl-vault-selected-vault') // Clean up
+      } catch (error) {
+        console.error('Failed to load selected vault:', error)
+        // Fallback to legacy loading
+        this.loadPersistedVaultState()
+      }
+    } else {
+      // Load existing vault from legacy system
+      this.loadPersistedVaultState()
+    }
+
     // Start price monitoring
     this.refreshPrice()
 

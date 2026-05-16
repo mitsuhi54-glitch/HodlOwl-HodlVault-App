@@ -150,6 +150,22 @@ class VaultStorageService {
   }
 
   /**
+   * Check if a vault with the same price target already exists for this wallet
+   * @param {string} walletAddress - Wallet address to check
+   * @param {number} priceTargetCents - Price target in cents
+   * @returns {Promise<Object|null>} Existing vault or null
+   */
+  async checkForDuplicateVault(walletAddress, priceTargetCents) {
+    if (!walletAddress || priceTargetCents === undefined) return null
+    try {
+      const vaults = await this.getVaultsByWallet(walletAddress)
+      return vaults.find((v) => v.priceTargetCents === priceTargetCents) || null
+    } catch {
+      return null
+    }
+  }
+
+  /**
    * Clear all vault localStorage keys (to be called on wallet disconnect/switch)
    */
   clearLocalVaultData() {

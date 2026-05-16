@@ -293,6 +293,115 @@
                       Permission denied. Enable in browser settings.
                     </q-tooltip>
                   </div>
+
+                  <!-- Email Notification -->
+                  <div class="q-mt-sm">
+                    <template v-if="savedEmail">
+                      <div class="row items-center q-gutter-xs">
+                        <q-toggle
+                          v-model="emailNotificationsEnabled"
+                          label="Email Notif"
+                          color="primary"
+                          dense
+                          :disable="!connectedAddress || !emailVerified"
+                          @update:model-value="toggleEmailNotifications"
+                        />
+                        <span class="text-caption text-grey-5">{{ savedEmail }}</span>
+                        <q-badge
+                          v-if="emailVerified"
+                          color="positive"
+                          label="Verified"
+                          class="q-ml-xs"
+                        />
+                        <q-badge
+                          v-else
+                          color="warning"
+                          label="Unverified"
+                          class="q-ml-xs"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          round
+                          size="xs"
+                          color="negative"
+                          icon="close"
+                          @click="removeEmail"
+                        >
+                          <q-tooltip>Remove email</q-tooltip>
+                        </q-btn>
+                      </div>
+                      <!-- Verification code input (shown when unverified) -->
+                      <div v-if="!emailVerified && showVerifyCodeInput" class="row items-center q-gutter-xs q-mt-xs">
+                        <q-input
+                          v-model="verificationCode"
+                          placeholder="6-digit code"
+                          dense
+                          dark
+                          outlined
+                          type="text"
+                          maxlength="6"
+                          style="min-width: 130px"
+                          :disable="verifyingCode"
+                          @keyup.enter="verifyCode"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          color="primary"
+                          label="Verify"
+                          :loading="verifyingCode"
+                          :disable="verificationCode.length !== 6"
+                          @click="verifyCode"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          color="grey"
+                          label="Resend"
+                          size="sm"
+                          :disable="verifyingCode"
+                          @click="resendCode"
+                        />
+                      </div>
+                      <div v-else-if="!emailVerified && !showVerifyCodeInput" class="q-mt-xs">
+                        <q-btn
+                          flat
+                          dense
+                          color="primary"
+                          label="Verify Email"
+                          size="sm"
+                          @click="showVerifyCodeInput = true"
+                        />
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="row items-center q-gutter-xs">
+                        <q-input
+                          v-model="emailAddress"
+                          placeholder="your@email.com"
+                          dense
+                          dark
+                          outlined
+                          type="email"
+                          style="min-width: 170px"
+                          :disable="!connectedAddress || savingEmail"
+                          @keyup.enter="saveEmail"
+                        />
+                        <q-btn
+                          flat
+                          dense
+                          color="primary"
+                          icon="save"
+                          :loading="savingEmail"
+                          :disable="!emailAddress || !connectedAddress"
+                          @click="saveEmail"
+                        >
+                          <q-tooltip>Save email for notifications</q-tooltip>
+                        </q-btn>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </div>
             </q-card>
@@ -430,6 +539,7 @@ import {
   isNotificationSubscribed,
 } from 'src/boot/onesignal'
 import { oneSignalApi } from 'src/services/onesignal-api'
+import { emailApi } from 'src/services/email-api'
 import { vaultApi } from 'src/services/api.service'
 
 export default defineComponent({
@@ -464,6 +574,15 @@ export default defineComponent({
       // ✅ Push notification state
       notificationsEnabled: false,
       notificationPermissionDenied: false,
+      // ✅ Email notification state
+      savedEmail: null,
+      emailVerified: false,
+      emailAddress: '',
+      emailNotificationsEnabled: false,
+      savingEmail: false,
+      showVerifyCodeInput: false,
+      verificationCode: '',
+      verifyingCode: false,
       // ✅ Auto-withdrawal toggle loading states
       togglingAutoWithdrawal: {},
     }
@@ -627,6 +746,130 @@ export default defineComponent({
     },
 
     /**
+     * Toggle email notifications on/off
+     */
+    async toggleEmailNotifications(enabled) {
+      try {
+        if (enabled && !this.savedEmail) {
+          this.emailNotificationsEnabled = false
+          return
+        }
+        await emailApi.updateEmailNotificationPreference(enabled)
+        this.emailNotificationsEnabled = enabled
+        this.$q.notify({
+          type: enabled ? 'positive' : 'info',
+          message: enabled ? 'Email notifications enabled' : 'Email notifications disabled',
+        })
+      } catch {
+        this.emailNotificationsEnabled = !enabled
+        this.$q.notify({
+          type: 'negative',
+          message: 'Failed to update email notification preference',
+        })
+      }
+    },
+
+    /**
+     * Save email address for notifications
+     */
+    async saveEmail() {
+      if (!this.emailAddress) return
+      this.savingEmail = true
+      try {
+        const result = await emailApi.registerEmail(this.emailAddress)
+        this.savedEmail = result.email
+        this.emailVerified = false
+        this.emailAddress = ''
+        this.emailNotificationsEnabled = true
+        this.showVerifyCodeInput = true
+        this.verificationCode = ''
+        this.$q.notify({
+          type: 'positive',
+          message: 'Verification code sent to your email',
+        })
+      } catch (err) {
+        this.$q.notify({
+          type: 'negative',
+          message: err?.response?.data?.message || 'Failed to save email',
+        })
+      } finally {
+        this.savingEmail = false
+      }
+    },
+
+    async verifyCode() {
+      if (this.verificationCode.length !== 6) return
+      this.verifyingCode = true
+      try {
+        await emailApi.verifyEmailCode(this.verificationCode)
+        this.emailVerified = true
+        this.showVerifyCodeInput = false
+        this.verificationCode = ''
+        this.$q.notify({
+          type: 'positive',
+          message: 'Email verified successfully!',
+        })
+      } catch (err) {
+        const msg = err?.response?.data?.message || 'Verification failed'
+        if (msg.toLowerCase().includes('expired')) {
+          this.$q.notify({
+            type: 'warning',
+            message: 'Code expired. Request a new one.',
+          })
+        } else {
+          this.$q.notify({
+            type: 'negative',
+            message: msg,
+          })
+        }
+      } finally {
+        this.verifyingCode = false
+      }
+    },
+
+    async resendCode() {
+      this.verifyingCode = true
+      try {
+        await emailApi.resendVerificationCode()
+        this.verificationCode = ''
+        this.$q.notify({
+          type: 'positive',
+          message: 'New verification code sent',
+        })
+      } catch {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Failed to resend code',
+        })
+      } finally {
+        this.verifyingCode = false
+      }
+    },
+
+    /**
+     * Remove email address
+     */
+    async removeEmail() {
+      try {
+        await emailApi.unregisterEmail()
+        this.savedEmail = null
+        this.emailNotificationsEnabled = false
+        this.$q.notify({
+          type: 'info',
+          message: 'Email removed',
+        })
+        this.emailVerified = false
+        this.showVerifyCodeInput = false
+        this.verificationCode = ''
+      } catch {
+        this.$q.notify({
+          type: 'negative',
+          message: 'Failed to remove email',
+        })
+      }
+    },
+
+    /**
      * Check current notification subscription status
      */
     async checkNotificationStatus() {
@@ -652,10 +895,17 @@ export default defineComponent({
         if (this.connectedAddress) {
           console.log(`[NotifDebug:page] Fetching backend preferences`)
           const prefs = await oneSignalApi.getPreferences()
-          console.log(`[NotifDebug:page] Backend prefs | notifications=${prefs?.preferences?.notifications} | hasPlayerId=${!!prefs?.oneSignalPlayerId}`)
+          console.log(`[NotifDebug:page] Backend prefs | notifications=${prefs?.preferences?.notifications} | hasPlayerId=${!!prefs?.oneSignalPlayerId} | email=${!!prefs?.email} | emailNotifications=${prefs?.preferences?.emailNotifications}`)
           if (prefs?.preferences?.notifications === false) {
             console.log(`[NotifDebug:page] Backend says notifications disabled — overriding toggle to OFF`)
             this.notificationsEnabled = false
+          }
+          // Email notification state
+          this.savedEmail = prefs?.email || null
+          this.emailVerified = prefs?.emailVerified === true
+          this.emailNotificationsEnabled = prefs?.preferences?.emailNotifications === true
+          if (this.savedEmail && !this.emailVerified) {
+            this.showVerifyCodeInput = false
           }
         }
 

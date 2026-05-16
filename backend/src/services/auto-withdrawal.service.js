@@ -19,6 +19,7 @@ import { fetchOraclePrice } from './oracle.service.js'
 import { logActivity } from './activity-log.service.js'
 import { sendEvent } from './sse.service.js'
 import { sendAutoWithdrawalNotification } from './onesignal.service.js'
+import { sendEmailNotification } from './email.service.js'
 import { inferNetworkFromAddress } from '../utils/blockchain.js'
 
 // Load contract artifact using fs (Node.js 20 compatible)
@@ -269,6 +270,21 @@ export async function checkAndWithdraw() {
         } catch (notifyError) {
           const notifElapsed = Date.now() - notifStartTime
           console.warn(`[NotifDebug:backend:auto-withdraw] <<< Push notification threw exception | elapsed=${notifElapsed}ms | error=${notifyError.message}`, notifyError)
+        }
+
+        // Send email notification
+        const emailStartTime = Date.now()
+        console.log(`[NotifDebug:backend:auto-withdraw] >>> Sending email notification | wallet=${vault.walletAddress.slice(0, 16)}... | vaultName=${vault.name || 'Unnamed Vault'}`)
+        try {
+          const emailResult = await sendEmailNotification(vault.walletAddress, {
+            vaultName: vault.name || 'Unnamed Vault',
+            contractAddress: vault.contractAddress,
+          })
+          const emailElapsed = Date.now() - emailStartTime
+          console.log(`[NotifDebug:backend:auto-withdraw] <<< Email notification result | sent=${emailResult.sent} | reason=${emailResult.reason || 'N/A'} | elapsed=${emailElapsed}ms`)
+        } catch (emailError) {
+          const emailElapsed = Date.now() - emailStartTime
+          console.warn(`[NotifDebug:backend:auto-withdraw] <<< Email notification threw exception | elapsed=${emailElapsed}ms | error=${emailError.message}`, emailError)
         }
 
         withdrawn++

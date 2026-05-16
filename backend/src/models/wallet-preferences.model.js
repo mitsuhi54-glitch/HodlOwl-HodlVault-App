@@ -14,6 +14,22 @@ const walletPreferencesSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    email: {
+      type: String,
+      default: null,
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationCode: {
+      type: String,
+      default: null,
+    },
+    emailVerificationExpiry: {
+      type: Date,
+      default: null,
+    },
     preferences: {
       autoWithdrawal: {
         type: Boolean,
@@ -22,6 +38,10 @@ const walletPreferencesSchema = new mongoose.Schema(
       notifications: {
         type: Boolean,
         default: true,
+      },
+      emailNotifications: {
+        type: Boolean,
+        default: false,
       },
       defaultOracle: {
         type: String,
@@ -56,6 +76,7 @@ walletPreferencesSchema.statics.getOrCreate = async function (walletAddress) {
       preferences: {
         autoWithdrawal: false,
         notifications: true,
+        emailNotifications: false,
         defaultOracle: 'oracles.cash',
         theme: 'auto',
       },
@@ -71,7 +92,7 @@ walletPreferencesSchema.statics.updatePreferences = async function (walletAddres
   const normalizedAddress = walletAddress.toLowerCase()
 
   // Allowed preference fields
-  const allowedFields = ['autoWithdrawal', 'notifications', 'defaultOracle', 'theme']
+  const allowedFields = ['autoWithdrawal', 'notifications', 'emailNotifications', 'defaultOracle', 'theme']
   const updateData = {}
 
   allowedFields.forEach((field) => {
