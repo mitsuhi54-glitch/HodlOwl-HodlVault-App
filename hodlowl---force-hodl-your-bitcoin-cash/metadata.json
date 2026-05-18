@@ -1,8 +1,0 @@
-{
-  "name": "HodlOwl - Force-HODL Your Bitcoin Cash",
-  "description": "Securely lock your Bitcoin Cash in smart contracts until your price target is met. Disciplined investing for the Cyberpunk era.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
