@@ -1,60 +1,11 @@
-// Quasar SCSS (& Sass) Variables
-// --------------------------------------------------
-// HodlVault Protocol Design System
-
+/* 
+  GLOBAL DESIGN SYSTEM VARIABLES
+  HodlVault Protocol
+*/
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-// Brand Colors
-$primary: #00ff88;
-$secondary: #00d588;
-$accent: #00b368;
-
-// Dark Theme Colors
-$dark: #000000;
-$dark-page: #0a0a0a;
-
-// Light Theme Colors
-$light: #ffffff;
-$light-page: #f8fafc;
-
-// Status Colors
-$positive: #00ff88;
-$negative: #ff3366;
-$info: #31ccec;
-$warning: #ffb800;
-
-// Dark Theme Overrides
-$body-background: #0a0a0a;
-$body-color: #ffffff;
-$dark-text: #ffffff;
-$dark-text-secondary: #9ca3af;
-
-// Light Theme Overrides
-$light-body-background: #f8fafc;
-$light-body-color: #0f172a;
-$light-text-secondary: #475569;
-
-// Card and Surface Colors
-$card-background: #1a1a1a;
-$surface-background: #1e1e1e;
-$border-color: #2a2a2a;
-
-// Light Card Colors
-$light-card-background: #ffffff;
-$light-surface-background: #f1f5f9;
-$light-border-color: #cbd5e1;
-
-// Button Overrides
-$button-primary-bg: #00ff88;
-$button-primary-text: #000000;
-$button-outline-border: #00ff88;
-$button-outline-text: #00ff88;
-
-// Typography
-$typography-font-family: 'Inter', sans-serif;
-
-// CSS Custom Properties for the new design system
 :root {
+  /* Colors - Dark Mode (Default) */
   --color-bg: #000000;
   --color-page: #0a0a0a;
   --color-surface: #1a1a1a;
@@ -72,13 +23,19 @@ $typography-font-family: 'Inter', sans-serif;
   --color-primary-btn-text: #000000;
   --color-glass: rgba(255, 255, 255, 0.03);
   --color-glass-hover: rgba(255, 255, 255, 0.08);
+
+  /* Typography */
   --font-heading: 'Rajdhani', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  /* Spacing & Shapes */
   --radius-card: 12px;
   --radius-input: 8px;
   --radius-pill: 999px;
   --container-max: 1280px;
+
+  /* Transitions */
   --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 

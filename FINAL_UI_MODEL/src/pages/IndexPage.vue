@@ -1,12 +1,12 @@
 <template>
   <main class="container" style="padding-top: 80px; padding-bottom: 40px;">
-    <div class="hero-page-grid" style="display: grid; grid-template-columns: 5fr 7fr; gap: 48px; align-items: start;">
-
+    <div style="display: grid; grid-template-columns: 5fr 7fr; gap: 48px; align-items: start;">
+      
       <!-- SECTION: Hero Left -->
       <div class="hero-left">
-        <h1>FORCE-HODL YOUR</h1>
+        <h1 style="font-size: clamp(2rem, 4vw, 3rem); line-height: 1.1; margin-bottom: 0;">FORCE-HODL YOUR</h1>
         <h1 class="text-neon" style="font-size: clamp(2.5rem, 5vw, 4rem); line-height: 1.1; margin-bottom: 24px;">BITCOIN CASH</h1>
-
+        
         <p class="text-muted" style="max-width: 480px; font-size: 16px; margin-bottom: 32px;">
           Lock your BCH in non-custodial smart contracts that only trigger withdrawals when your minimum price target is reached. Avoid emotional selling and secure your future moonbag.
         </p>
@@ -32,7 +32,7 @@
         </div>
       </div>
 
-      <!-- SECTION: Slideshow Right -->
+      <!-- SECTION: Create Vault Form (Replaced with Slideshow in this exact HTML) -->
       <div class="hero-right">
         <div class="oracle-strip" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 11px;">
           <div style="display: flex; align-items: center; gap: 4px; color: var(--color-neon);">
@@ -40,12 +40,13 @@
             <span class="text-mono">Oracle Status: Stable</span>
           </div>
           <div class="text-muted text-mono">
-            Latest Price: &hairsp;24,500.00
+            Latest Price: ₱24,500.00
           </div>
           <a href="#" class="text-neon text-mono" style="text-decoration: none;">REFRESH</a>
         </div>
 
         <div class="slideshow-container" style="cursor: pointer;" @click="advanceSlide">
+          <!-- Slide 1 -->
           <div class="slide" :class="{ active: slideIndex === 0 }" style="display: block;">
             <img src="https://plus.unsplash.com/premium_photo-1681487769650-a0c3fbaed81a?q=80&w=1000&auto=format&fit=crop" alt="System Interface">
             <div class="slide-overlay">
@@ -53,6 +54,7 @@
               <div class="slide-description">Your assets remain under your control via mathematical smart contracts.</div>
             </div>
           </div>
+          <!-- Slide 2 -->
           <div class="slide" :class="{ active: slideIndex === 1 }" style="display: block;">
             <img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=1000&auto=format&fit=crop" alt="Network Nodes">
             <div class="slide-overlay">
@@ -60,6 +62,7 @@
               <div class="slide-description">Fail-safe price monitoring across multiple Tier-1 data providers.</div>
             </div>
           </div>
+          <!-- Slide 3 -->
           <div class="slide" :class="{ active: slideIndex === 2 }" style="display: block;">
             <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop" alt="Digital Future">
             <div class="slide-overlay">
@@ -68,6 +71,7 @@
             </div>
           </div>
 
+          <!-- DOTS NAVIGATION -->
           <div class="slideshow-dots" @click.stop>
             <button class="dot-btn" :class="{ active: slideIndex === 0 }" @click="goToSlide(0)"></button>
             <button class="dot-btn" :class="{ active: slideIndex === 1 }" @click="goToSlide(1)"></button>
@@ -126,29 +130,29 @@ export default defineComponent({
         const targetVal = counter.getAttribute('data-target');
         const finalTarget = +targetVal;
         const isFloat = targetVal.includes('.');
-
+        
         const duration = 1500;
         const frameRate = 30;
         const characters = '0123456789';
-
+        
         let startTime = null;
         let originalText = isFloat ? finalTarget.toFixed(2) : finalTarget.toString();
-
+        
         const addCommas = (str) => {
           let parts = str.split('.');
           parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
           return parts.join('.');
         };
-
+        
         const numLen = originalText.length;
-
+        
         const animate = (timestamp) => {
           if (!startTime) startTime = timestamp;
           const progress = timestamp - startTime;
           const progressRatio = Math.min(progress / duration, 1);
-
+          
           const numRevealed = Math.floor(progressRatio * numLen);
-
+          
           let currentStr = '';
           for (let i = 0; i < numLen; i++) {
             if (originalText[i] === '.') {
@@ -161,9 +165,9 @@ export default defineComponent({
               currentStr += characters[Math.floor(Math.random() * characters.length)];
             }
           }
-
+          
           counter.innerText = addCommas(currentStr);
-
+          
           if (progress < duration) {
             setTimeout(() => requestAnimationFrame(animate), frameRate);
           } else {

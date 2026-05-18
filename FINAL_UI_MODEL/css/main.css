@@ -1,3 +1,5 @@
+@import "variables.css";
+
 /* RESET & BASE */
 * {
   margin: 0;
@@ -14,13 +16,16 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="%2300ff88"/><path transform="rotate(-15 16 16)" d="M19,13.5c0-2-1.5-2.5-3.5-2.5h-4.5v5h4.5C17.5,16,19,15.5,19,13.5z M20,20.5c0-2.2-1.8-3-4-3h-5v6h5C18.2,23.5,20,22.7,20,20.5z M11,6h2v2h-2V6z M15,6h2v2h-2V6z M11,24h2v2h-2V24z M15,24h2v2h-2V24z M10,9h8v4.5c0,2.1-1.5,3.3-3.1,3.3c1.6,0,3.1,1.2,3.1,3.3V24h-8V9z" fill="black"/></svg>') 16 16, auto;
 }
 
+/* Ensure links and buttons still feel clickable but maintain the custom mood */
 a, button, .btn, .chip, .wallet-pill, .dot-btn, .toggle-switch, .modal-overlay, .vault-card, .status-chip, [style*="cursor: pointer"] {
   cursor: pointer;
   transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94), filter 0.2s ease-out, background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* Global Hover Animations */
 a:hover:not(.brand), button:hover:not(.btn--primary), .btn:hover:not(.btn--primary), .chip:hover:not(.active), .wallet-pill:hover, .dot-btn:hover:not(.active), .toggle-switch:hover, .status-chip:hover {
   transform: scale(1.03);
   filter: brightness(1.15);
@@ -203,7 +208,7 @@ input[type="text"]:focus, input[type="number"]:focus {
 }
 
 /* HEADER & FOOTER */
-header, .q-header {
+header {
   height: 64px;
   background-color: var(--color-bg);
   border-bottom: 1px solid var(--color-surface);
@@ -250,11 +255,11 @@ nav a {
   position: relative;
 }
 
-nav a.active, nav a.router-link-active {
+nav a.active {
   color: var(--color-neon);
 }
 
-nav a.active::after, nav a.router-link-active::after {
+nav a.active::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -281,17 +286,6 @@ nav a.active::after, nav a.router-link-active::after {
   font-family: var(--font-mono);
   font-size: 12px;
   cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  color: inherit;
-  text-align: inherit;
-  width: auto;
-  line-height: normal;
-}
-
-.wallet-pill:hover {
-  transform: scale(1.03);
-  filter: brightness(1.15);
 }
 
 .dot {
@@ -305,7 +299,7 @@ nav a.active::after, nav a.router-link-active::after {
   background-color: var(--color-neon);
 }
 
-footer, .q-footer {
+footer {
   height: 40px;
   background-color: var(--color-bg);
   border-top: 1px solid var(--color-surface);
@@ -334,7 +328,7 @@ footer, .q-footer {
   gap: 4px;
 }
 
-/* RESPONSIVE HAMBURGER */
+/* RESPONSIVE HAMBURGER (Simplified for now) */
 .menu-toggle { display: none; }
 
 [data-theme="light"] .text-neon,
@@ -342,9 +336,9 @@ footer, .q-footer {
 [data-theme="light"] .badge--green,
 [data-theme="light"] .status-chip--ready,
 [data-theme="light"] .portfolio-summary__value--neon {
-  color: #00ff88 !important;
-  text-shadow:
-    -1px -1px 0 rgba(0,0,0,0.9),
+  color: #00ff88 !important; /* Keep the bright neon */
+  text-shadow: 
+    -1px -1px 0 rgba(0,0,0,0.9),  
      1px -1px 0 rgba(0,0,0,0.9),
     -1px  1px 0 rgba(0,0,0,0.9),
      1px  1px 0 rgba(0,0,0,0.9),
@@ -357,8 +351,8 @@ footer, .q-footer {
 
 [data-theme="light"] .status-chip--hodl {
   color: #ffb800 !important;
-  text-shadow:
-    -1px -1px 0 rgba(0,0,0,0.9),
+  text-shadow: 
+    -1px -1px 0 rgba(0,0,0,0.9),  
      1px -1px 0 rgba(0,0,0,0.9),
     -1px  1px 0 rgba(0,0,0,0.9),
      1px  1px 0 rgba(0,0,0,0.9);
@@ -370,8 +364,7 @@ footer, .q-footer {
   border-color: rgba(255, 51, 102, 0.4);
 }
 
-[data-theme="light"] header nav a.active,
-[data-theme="light"] .q-header nav a.active {
+[data-theme="light"] header nav a.active {
   color: var(--color-text);
   border-bottom: 2px solid var(--color-neon);
 }
@@ -400,7 +393,7 @@ footer, .q-footer {
     color: var(--color-text);
     cursor: pointer;
   }
-  nav { display: none; }
+  nav { display: none; } /* Will be handled by JS */
   .container { padding: 0 16px; }
 }
 
@@ -679,11 +672,11 @@ input:checked + .toggle-slider:before {
 }
 
 .vault-card__progress-fill--hodl {
-  background: #ffcc00 !important;
+  background: #ffcc00 !important; /* Brighter yellow for HODLing progress */
 }
 
 .vault-card__progress-fill--ready {
-  background: var(--color-neon) !important;
+  background: var(--color-neon) !important; /* Green for Ready progress */
 }
 
 .vault-card__title-area {
@@ -800,7 +793,7 @@ input:checked + .toggle-slider:before {
   border-color: var(--color-neon);
 }
 
-/* ACTIVITY LIST */
+/* ACTIVITY LIST REFINEMENT */
 .activity-scroll {
   max-height: 50vh;
   overflow-y: auto;
@@ -814,6 +807,12 @@ input:checked + .toggle-slider:before {
 .activity-scroll::-webkit-scrollbar-thumb {
   background: var(--color-border);
   border-radius: 4px;
+}
+
+/* PORTFOLIO SUMMARY */
+.portfolio-summary {
+  margin-top: 16px;
+  border-top: 2px solid var(--color-neon) !important;
 }
 
 .portfolio-summary__stats-grid {
@@ -914,21 +913,6 @@ input:checked + .toggle-slider:before {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
-}
-
-/* DASHBOARD PAGE GRID */
-.page-grid {
-  display: grid;
-  grid-template-columns: 280px 1fr 340px;
-  gap: 24px;
-  padding-top: 32px;
-  padding-bottom: 40px;
-}
-
-@media (max-width: 1200px) {
-  .page-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* ABOUT SECTION STYLES */
@@ -1119,110 +1103,4 @@ input:checked + .toggle-slider:before {
   font-size: 12px;
   color: var(--color-text-dim);
   text-decoration: none;
-}
-
-/* QUASAR COMPONENT OVERRIDES */
-.body--dark {
-  .q-header, .q-footer {
-    background-color: var(--color-bg) !important;
-  }
-  .q-card {
-    background-color: var(--color-surface) !important;
-    border: 1px solid var(--color-border);
-  }
-  .q-field__control {
-    background-color: var(--color-surface-input) !important;
-    border-color: var(--color-border) !important;
-  }
-  .q-field__native, .q-field__input {
-    color: var(--color-text) !important;
-  }
-  .q-dialog .q-card {
-    background-color: var(--color-page) !important;
-  }
-  .q-btn--outline {
-    border-color: var(--color-text-muted) !important;
-    color: var(--color-text) !important;
-  }
-}
-
-.body--light {
-  .q-header, .q-footer {
-    background-color: var(--color-bg) !important;
-  }
-  .q-card {
-    background-color: var(--color-surface) !important;
-    border: 1px solid var(--color-border);
-  }
-  .q-field__control {
-    background-color: var(--color-surface-input) !important;
-    border-color: var(--color-border) !important;
-  }
-  .q-field__native, .q-field__input {
-    color: var(--color-text) !important;
-  }
-  .q-dialog .q-card {
-    background-color: var(--color-page) !important;
-  }
-}
-
-/* Tech Cube Animation */
-.tech-cube-container {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  margin-bottom: 20px;
-  perspective: 300px;
-}
-
-.tech-cube {
-  width: 60px;
-  height: 60px;
-  position: relative;
-  margin: 10px auto;
-  transform-style: preserve-3d;
-  animation: cubeSpin 8s infinite linear;
-}
-
-.cube-face {
-  position: absolute;
-  width: 60px;
-  height: 60px;
-  background: rgba(0, 255, 136, 0.08);
-  border: 1px solid rgba(0, 255, 136, 0.3);
-  box-shadow: 0 0 12px rgba(0, 255, 136, 0.1);
-}
-
-.face-front  { transform: rotateY(0deg) translateZ(30px); }
-.face-back   { transform: rotateY(180deg) translateZ(30px); }
-.face-right  { transform: rotateY(90deg) translateZ(30px); }
-.face-left   { transform: rotateY(-90deg) translateZ(30px); }
-.face-top    { transform: rotateX(90deg) translateZ(30px); }
-.face-bottom { transform: rotateX(-90deg) translateZ(30px); }
-
-@keyframes cubeSpin {
-  0%   { transform: rotateX(-20deg) rotateY(0deg); }
-  100% { transform: rotateX(-20deg) rotateY(360deg); }
-}
-
-/* HERO PAGE GRID */
-@media (max-width: 900px) {
-  .hero-page-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* Floating Widget */
-.floating-widget {
-  position: fixed;
-  bottom: 60px;
-  right: 32px;
-  z-index: 10;
-}
-
-/* Hero page specific */
-.hero-left h1 {
-  font-size: clamp(2rem, 4vw, 3rem);
-  line-height: 1.1;
-  margin-bottom: 0;
 }

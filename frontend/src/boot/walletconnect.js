@@ -320,9 +320,10 @@ function getModal() {
       '--wcm-accent-color': '#00d588',
       '--wcm-accent-fill-color': '#ffffff',
     },
-    standaloneChains: [BCH_CHIPNET_CHAIN], // Default to chipnet
-    qrModalSize: 'lg', // Larger QR code
-    enableMobileWalletFocus: true, // Better mobile experience
+    standaloneChains: [BCH_CHIPNET_CHAIN],
+    qrModalSize: 'lg',
+    enableMobileWalletFocus: true,
+    enableExplorer: false,
   })
   return modal
 }
@@ -586,6 +587,12 @@ export function initializeWalletConnect(store) {
     async recoverPublicKey() {
       return await recoverPublicKey(store)
     },
+
+    resetConnectionState() {
+      isConnecting = false
+      connectionPromise = null
+      console.log('[WC] Connection state reset')
+    },
   }
 }
 
@@ -680,6 +687,21 @@ async function restoreSessionIfAny(store) {
   }
 }
 
+// On boot, clean any stale sessions stored by SignClient (IndexedDB)
+// so we don't get stuck trying to sync with a wallet that's no longer connected.
+async function clearStaleSessionsOnBoot(store) {
+  try {
+    const client = await getSignClient(store)
+    const sessions = client.session.getAll()
+    for (const s of sessions) {
+      try {
+        await client.disconnect({ topic: s.topic })
+      } catch { /* ignore */ }
+    }
+    currentSession = null
+  } catch { /* SignClient not yet available */ }
+}
+
 export default boot(({ app }) => {
   const store = app.config.globalProperties.$store
   if (!store) {
@@ -689,5 +711,8 @@ export default boot(({ app }) => {
   const wc = initializeWalletConnect(store)
   app.config.globalProperties.$walletConnect = wc
   app.provide('walletConnect', wc)
-  restoreSessionIfAny(store)
+  // Wipe stale sessions first, then attempt restore (will start clean)
+  clearStaleSessionsOnBoot(store).then(() => {
+    restoreSessionIfAny(store)
+  })
 })
