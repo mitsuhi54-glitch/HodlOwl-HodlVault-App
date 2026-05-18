@@ -204,7 +204,9 @@ input[type="text"]:focus, input[type="number"]:focus {
 
 /* HEADER & FOOTER */
 header, .q-header {
-  height: 64px;
+  height: 64px !important;
+  min-height: 64px !important;
+  max-height: 64px !important;
   background-color: var(--color-bg);
   border-bottom: 1px solid var(--color-surface);
   display: flex;
@@ -212,6 +214,20 @@ header, .q-header {
   position: sticky;
   top: 0;
   z-index: 100;
+  overflow: hidden;
+}
+
+/* Quasar fixed header offset — lock to header height so content gap matches UI model */
+.q-page-container {
+  padding-top: 64px !important;
+}
+
+.q-page-container.page-container--dashboard {
+  padding-top: 64px !important;
+}
+
+.q-page-container > * {
+  min-height: 0;
 }
 
 .header-content {
@@ -219,6 +235,8 @@ header, .q-header {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .brand {
@@ -246,7 +264,7 @@ nav a {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 20px 0;
+  padding: 12px 0;
   position: relative;
 }
 
@@ -916,13 +934,33 @@ input:checked + .toggle-slider:before {
   font-weight: 700;
 }
 
+/* Page content spacing below header (UI model: compact, ~24–32px) */
+.container--page-hero {
+  padding-top: 24px;
+  padding-bottom: 40px;
+  flex: none;
+}
+
+/* Dashboard: match UI model — single top spacing layer (no wrapper + grid stack) */
+.container--page-dashboard {
+  padding-top: 20px;
+  padding-bottom: 40px;
+  flex: none;
+}
+
+.container--page-dashboard .page-grid {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 /* DASHBOARD PAGE GRID */
 .page-grid {
   display: grid;
   grid-template-columns: 280px 1fr 340px;
   gap: 24px;
-  padding-top: 32px;
+  padding-top: 24px;
   padding-bottom: 40px;
+  align-items: start;
 }
 
 @media (max-width: 1200px) {
@@ -935,12 +973,12 @@ input:checked + .toggle-slider:before {
 .about-container {
   max-width: 900px;
   margin: 0 auto;
-  padding: 60px 20px;
+  padding: 32px 20px 60px;
 }
 
 .about-nav-sticky {
   position: sticky;
-  top: 80px;
+  top: 72px;
   padding: 12px;
   background: var(--color-surface-elevated);
   border: 1px solid var(--color-border);
@@ -1166,43 +1204,132 @@ input:checked + .toggle-slider:before {
   }
 }
 
-/* Tech Cube Animation */
+/* Active vaults empty state (UI model) */
+.active-vaults-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  background: radial-gradient(circle at center, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
+  border: 1px solid rgba(0, 255, 136, 0.1);
+  border-radius: 24px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.active-vaults-empty-state__title {
+  font-family: var(--font-heading);
+  font-size: 20px;
+  margin: 0 0 12px;
+  letter-spacing: 0.1em;
+  color: var(--color-text);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.active-vaults-empty-state__text {
+  font-size: 14px;
+  color: var(--color-text-dim);
+  margin: 0 0 24px;
+  max-width: 240px;
+  line-height: 1.6;
+}
+
+.active-vaults-empty-state__cta {
+  width: 100%;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
+}
+
+/* Futuristic cube visualization (FINAL_UI_MODEL) */
 .tech-cube-container {
   position: relative;
-  width: 80px;
-  height: 80px;
-  margin-bottom: 20px;
-  perspective: 300px;
+  width: 160px;
+  height: 160px;
+  margin-bottom: 24px;
+  perspective: 1000px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tech-cube {
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
   position: relative;
-  margin: 10px auto;
   transform-style: preserve-3d;
-  animation: cubeSpin 8s infinite linear;
+  transform: rotateX(-20deg) rotateY(45deg);
+  animation: rotateCube 15s linear infinite;
+}
+
+@keyframes rotateCube {
+  from { transform: rotateX(-20deg) rotateY(0deg); }
+  to { transform: rotateX(-20deg) rotateY(360deg); }
 }
 
 .cube-face {
   position: absolute;
-  width: 60px;
-  height: 60px;
-  background: rgba(0, 255, 136, 0.08);
-  border: 1px solid rgba(0, 255, 136, 0.3);
-  box-shadow: 0 0 12px rgba(0, 255, 136, 0.1);
+  width: 80px;
+  height: 80px;
+  background: rgba(0, 255, 136, 0.03);
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  box-shadow: inset 0 0 15px rgba(0, 255, 136, 0.1);
 }
 
-.face-front  { transform: rotateY(0deg) translateZ(30px); }
-.face-back   { transform: rotateY(180deg) translateZ(30px); }
-.face-right  { transform: rotateY(90deg) translateZ(30px); }
-.face-left   { transform: rotateY(-90deg) translateZ(30px); }
-.face-top    { transform: rotateX(90deg) translateZ(30px); }
-.face-bottom { transform: rotateX(-90deg) translateZ(30px); }
+.cube-face::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-image:
+    linear-gradient(rgba(0, 255, 136, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 136, 0.1) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
 
-@keyframes cubeSpin {
-  0%   { transform: rotateX(-20deg) rotateY(0deg); }
-  100% { transform: rotateX(-20deg) rotateY(360deg); }
+.face-front  { transform: translateZ(40px); }
+.face-back   { transform: rotateY(180deg) translateZ(40px); }
+.face-right  { transform: rotateY(90deg) translateZ(40px); }
+.face-left   { transform: rotateY(-90deg) translateZ(40px); }
+.face-top    { transform: rotateX(90deg) translateZ(40px); }
+.face-bottom { transform: rotateX(-90deg) translateZ(40px); }
+
+.glow-line {
+  position: absolute;
+  width: 2px;
+  height: 100px;
+  background: linear-gradient(to bottom, transparent, var(--color-neon), transparent);
+  opacity: 0.3;
+  animation: moveLine 3s ease-in-out infinite;
+}
+
+@keyframes moveLine {
+  0%, 100% { transform: translateY(-50px); opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { transform: translateY(50px); }
+}
+
+#vaults-list {
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-neon-dim) transparent;
+}
+
+#vaults-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+#vaults-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#vaults-list::-webkit-scrollbar-thumb {
+  background-color: var(--color-neon-dim);
+  border-radius: 20px;
 }
 
 /* HERO PAGE GRID */

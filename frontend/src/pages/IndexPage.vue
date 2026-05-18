@@ -1,5 +1,5 @@
 <template>
-  <main class="container" style="padding-top: 80px; padding-bottom: 40px;">
+  <main class="container container--page-hero">
     <div class="hero-page-grid" style="display: grid; grid-template-columns: 5fr 7fr; gap: 48px; align-items: start;">
 
       <!-- SECTION: Hero Left -->

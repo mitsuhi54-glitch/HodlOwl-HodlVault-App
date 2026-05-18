@@ -1,7 +1,6 @@
 <template>
-  <div>
-    <main class="container">
-      <div class="page-grid">
+  <main class="container container--page-dashboard">
+    <div class="page-grid">
 
         <!-- LEFT SIDEBAR -->
         <aside>
@@ -17,8 +16,19 @@
           </div>
 
           <div class="card card--elevated" style="margin-top: 16px;">
-            <span class="label-tiny">Market Feed</span>
-            <div style="display: flex; justify-content: space-between; margin-top: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="label-tiny">Market Feed</span>
+              <button v-if="!priceLoading" class="btn btn--outline" style="padding: 4px 12px; font-size: 10px;" @click="refreshPrice">Refresh</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+              <i v-if="priceLoading" class="material-icons text-muted" style="font-size: 16px;">sync</i>
+              <i v-else-if="oracleSuccess" class="material-icons text-neon" style="font-size: 16px;">check_circle</i>
+              <i v-else class="material-icons" style="color: #ffb300; font-size: 16px;">warning</i>
+              <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim);">Fetching oracle price...</span>
+              <span v-else-if="oracleSuccess" style="font-size: 12px; color: var(--color-neon);">Oracle online</span>
+              <span v-else style="font-size: 12px; color: #ffb300;">Oracle unavailable — refresh before deploying</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 10px;">
               <span class="text-muted" style="font-size: 13px;">BCH Price (Oracle)</span>
               <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim);">Loading...</span>
               <span v-else-if="oracleSuccess" class="text-neon text-heading" style="font-size: 14px;">₱{{ formatPrice(currentBchPrice) }}</span>
@@ -90,7 +100,7 @@
         </aside>
 
         <!-- CENTER COLUMN: Create Vault Form -->
-        <section>
+        <section id="create-vault-section">
           <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px;">
             <div>
               <h1 style="font-size: 32px; display: inline-block;">CREATE <span class="text-neon">HODL</span> VAULT</h1>
@@ -107,17 +117,6 @@
                 <img src="https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=400" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; mix-blend-mode: screen;">
               </div>
             </div>
-          </div>
-
-          <!-- Oracle Status -->
-          <div v-if="walletConnected" class="card" style="padding: 12px 20px; margin-bottom: 16px; border: 1px solid var(--color-border); display: flex; align-items: center; gap: 12px;">
-            <i v-if="priceLoading" class="material-icons text-muted" style="font-size: 20px;">sync</i>
-            <i v-else-if="oracleSuccess" class="material-icons text-neon" style="font-size: 20px;">check_circle</i>
-            <i v-else class="material-icons" style="color: #ffb300; font-size: 20px;">warning</i>
-            <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim);">Fetching oracle price...</span>
-            <span v-else-if="oracleSuccess" style="font-size: 12px; color: var(--color-neon);">Oracle online — BCH at ₱{{ formatPrice(currentBchPrice) }}</span>
-            <span v-else style="font-size: 12px; color: #ffb300;">Oracle unavailable — refresh price before deploying</span>
-            <button v-if="!priceLoading" class="btn btn--outline" style="margin-left: auto; padding: 4px 12px; font-size: 10px;" @click="refreshPrice">Refresh</button>
           </div>
 
           <div class="card" style="padding: 28px; border: 1px solid var(--color-border);">
@@ -165,20 +164,11 @@
 
         <!-- RIGHT SIDEBAR: Active Vaults -->
         <aside style="display: flex; flex-direction: column; gap: 0;">
-          <div v-if="!walletConnected" class="active-vaults-view-disconnected" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center; background: radial-gradient(circle at center, rgba(0, 255, 136, 0.05) 0%, transparent 70%); border: 1px solid rgba(0, 255, 136, 0.1); border-radius: 24px; margin-bottom: 24px; position: relative; overflow: hidden;">
-            <div class="tech-cube-container">
-              <div class="tech-cube">
-                <div class="cube-face face-front"></div>
-                <div class="cube-face face-back"></div>
-                <div class="cube-face face-right"></div>
-                <div class="cube-face face-left"></div>
-                <div class="cube-face face-top"></div>
-                <div class="cube-face face-bottom"></div>
-              </div>
-            </div>
-            <h2 style="font-size: 20px; margin-bottom: 12px; letter-spacing: 0.1em; color: var(--color-text); font-weight: 700;">No Vaults Found</h2>
-            <p style="font-size: 14px; color: var(--color-text-dim); margin-bottom: 24px; max-width: 240px; line-height: 1.6;">You haven't created any vaults yet. Start by creating your first HODL vault.</p>
-          </div>
+          <VaultsEmptyState
+            v-if="showVaultsEmptyState"
+            @action="onVaultsEmptyStateAction"
+          />
+
 
           <div v-else class="active-vaults-view-connected">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
@@ -197,12 +187,6 @@
                 <i class="material-icons" style="font-size: 32px; color: var(--color-text-dim);">cloud_off</i>
                 <p style="font-size: 12px; color: var(--color-text-dim); margin-top: 8px;">{{ backendError }}</p>
                 <button class="btn btn--outline" style="margin-top: 12px; padding: 6px 16px; font-size: 11px;" @click="loadVaults">Retry</button>
-              </div>
-
-              <div v-else-if="vaults.length === 0" class="empty-vaults-state" style="text-align: center; padding: 40px 20px;">
-                <i class="material-icons" style="font-size: 48px; color: var(--color-text-dim);">folder_open</i>
-                <h2 style="font-size: 16px; margin: 12px 0 8px 0; color: var(--color-text);">No Vaults Found</h2>
-                <p style="margin-bottom: 16px; color: var(--color-text-muted);">Create your first vault using the form.</p>
               </div>
 
               <div v-for="(vault, index) in vaults" :key="vault.id || index" class="vault-card" @click="openVaultManage(vault)">
@@ -261,9 +245,9 @@
           <span class="text-mono text-neon" style="font-size: 10px; font-weight: 700; letter-spacing: 0.1em;">{{ walletConnected ? 'SECURE CONNECTION ACTIVE' : 'WALLET DISCONNECTED' }}</span>
         </div>
       </div>
-    </main>
+  </main>
 
-    <!-- Vault Management Modal -->
+  <!-- Vault Management Modal -->
     <q-dialog v-model="showVaultManageModal" persistent maximized>
       <q-card class="modal-content" style="max-width: 700px; width: 100%;">
         <q-card-section class="modal-header">
@@ -411,7 +395,6 @@
         </q-card-section>
       </q-card>
     </q-dialog>
-  </div>
 </template>
 
 <script>
@@ -427,9 +410,14 @@ import { vaultStorage } from 'src/services/vault-storage'
 import { connectSSE, disconnectSSE } from 'src/services/sse.service'
 import { paytacaOptimizedWithdrawal } from 'src/services/paytaca-optimized-withdrawal'
 import { vaultApi } from 'src/services/api.service'
+import VaultsEmptyState from 'src/components/VaultsEmptyState.vue'
 
 export default defineComponent({
   name: 'DashboardPage',
+
+  components: {
+    VaultsEmptyState,
+  },
 
   data() {
     return {
@@ -491,6 +479,12 @@ export default defineComponent({
 
     walletAddress() {
       return this.$store.state.wallet?.address ?? null
+    },
+
+    showVaultsEmptyState() {
+      if (!this.walletConnected) return true
+      if (this.loadingVaults || this.backendError) return false
+      return this.vaults.length === 0
     },
 
     canDeploy() {
@@ -638,6 +632,23 @@ export default defineComponent({
   },
 
   methods: {
+    async onVaultsEmptyStateAction() {
+      if (!this.walletConnected) {
+        const wc = this.$walletConnect
+        if (!wc) return
+        try {
+          await wc.connect()
+        } catch (err) {
+          console.error('Wallet connect failed:', err)
+        }
+        return
+      }
+      const el = document.getElementById('create-vault-section')
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    },
+
     // ─── Oracle ───────────────────────────────────────────────
     async refreshPrice() {
       this.priceLoading = true

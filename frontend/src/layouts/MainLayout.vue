@@ -1,7 +1,7 @@
 <template>
   <div :data-theme="$q.dark.isActive ? 'dark' : 'light'">
     <q-layout view="lHh Lpr lFf">
-      <q-header>
+      <q-header class="app-header" :height-hint="64">
         <div class="container header-content">
           <router-link to="/" class="brand">
             <i class="material-icons text-neon" style="font-size: 20px;">lock</i>
@@ -53,7 +53,7 @@
         </div>
       </q-header>
 
-      <q-page-container>
+      <q-page-container :class="{ 'page-container--dashboard': isDashboardRoute }">
         <router-view />
       </q-page-container>
 
@@ -147,6 +147,10 @@ export default defineComponent({
       if (!this.connectedAddress) return ''
       const addr = this.connectedAddress
       return `${addr.slice(0, 8)}...${addr.slice(-8)}`
+    },
+
+    isDashboardRoute() {
+      return this.$route.path === '/dashboard'
     },
   },
 
