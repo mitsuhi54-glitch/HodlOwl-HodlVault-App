@@ -184,11 +184,52 @@ export const vaultApi = {
   },
 
   /**
-   * Get global vault statistics (across ALL users)
-   * @returns {Promise<Object>} Global stats { totalLockedBCH, activeVaults, totalTargetPriceReached }
+   * Get wallet balance from backend
+   * @param {string} address - BCH address
+   * @returns {Promise<Object>} { success, address, balanceSats }
    */
-  async getGlobalStats() {
-    const response = await apiClient.get('/vaults/stats')
+  async getWalletBalance(address) {
+    const response = await apiClient.get(`/wallet/${encodeURIComponent(address)}/balance`)
+    return response.data
+  },
+
+  /**
+   * Aggregate balances across multiple addresses by querying the backend for each
+   * @param {string[]} addresses - Array of BCH addresses
+   * @returns {Promise<number>} Total balance in satoshis
+   */
+  async getAggregateWalletBalance(addresses) {
+    if (!addresses || addresses.length === 0) return 0
+    const results = await Promise.allSettled(
+      addresses.map((addr) =>
+        apiClient.get(`/wallet/${encodeURIComponent(addr)}/balance`).then((r) => r.data),
+      ),
+    )
+    let total = 0
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]
+      if (r.status === 'fulfilled' && r.value?.success && r.value.balanceSats != null) {
+        console.log(`[BAL_TRACE] getAggregateWalletBalance | address[${i}]="${addresses[i]}" → ${r.value.balanceSats} sats`)
+        total += Number(r.value.balanceSats)
+      } else {
+        console.warn(`[BAL_TRACE] getAggregateWalletBalance | address[${i}] FAILED:`, r.reason?.message)
+      }
+    }
+    console.log(`[BAL_TRACE] getAggregateWalletBalance | ${addresses.length} addresses → TOTAL=${total} sats`)
+    return total
+  },
+
+  /**
+   * Get global vault statistics and top-user rankings (across ALL users)
+   * @param {number} [limit=10] - Number of top wallets per ranking category
+   * @returns {Promise<Object>} { success, stats, rankings }
+   */
+  async getGlobalStats(limit = 10, walletAddress = null) {
+    const params = { limit }
+    if (walletAddress) {
+      params.wallet = walletAddress
+    }
+    const response = await apiClient.get('/vaults/stats', { params })
     return response.data
   },
 }

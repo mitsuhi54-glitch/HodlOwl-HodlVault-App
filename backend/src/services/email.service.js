@@ -24,16 +24,29 @@ function warn(tag, msg, err) {
   console.warn(`[NotifDebug:backend:email-svc] ${tag} — ${msg}`, err || '')
 }
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    host: getHost(),
-    port: getPort(),
-    secure: getPort() === 465,
-    auth: {
-      user: getUser(),
-      pass: getPass(),
-    },
-  })
+let _transporter = null
+
+function getTransporter() {
+  if (!_transporter) {
+    log('TRANSPORT', 'Creating singleton SMTP transporter')
+    _transporter = nodemailer.createTransport({
+      host: getHost(),
+      port: getPort(),
+      secure: getPort() === 465,
+      auth: {
+        user: getUser(),
+        pass: getPass(),
+      },
+      pool: true,
+      maxConnections: 1,
+      rateDelta: 2000,
+      rateLimit: 5,
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000,
+    })
+  }
+  return _transporter
 }
 
 function generateVerificationCode() {
@@ -62,6 +75,18 @@ function buildVerificationEmailHtml(code) {
       </div>
     </div>
   `
+}
+
+async function sendVerificationEmail(to, code) {
+  log('SEND_VERIFY', `Sending verification email to ${to.slice(0, 6)}...`)
+  const transporter = getTransporter()
+  const info = await transporter.sendMail({
+    from: getFrom(),
+    to,
+    subject: 'HodlOwl — Verify Your Email Address',
+    html: buildVerificationEmailHtml(code),
+  })
+  log('SEND_VERIFY', `Verification email sent | messageId=${info.messageId} | accepted=${info.accepted?.length || 0} | rejected=${info.rejected?.length || 0}`)
 }
 
 export async function sendEmailNotification(walletAddress, data) {
@@ -135,8 +160,8 @@ export async function sendEmailNotification(walletAddress, data) {
       </div>
     `
 
-    log('SEND', `Step 3 — Creating SMTP transporter`)
-    const transporter = createTransporter()
+    log('SEND', `Step 3 — Getting SMTP transporter`)
+    const transporter = getTransporter()
 
     log('SEND', `Step 4 — Sending email to ${prefs.email.slice(0, 6)}...`)
     const info = await transporter.sendMail({
@@ -185,19 +210,15 @@ export async function registerEmail(walletAddress, email) {
 
     log('REG', `DB update result | exists=${!!preferences} | storedEmail=${preferences?.email ? preferences.email.slice(0, 6) + '...' : 'null'}`)
 
-    log('REG', `Step 2 — Sending verification email to ${email.slice(0, 6)}...`)
-    const transporter = createTransporter()
-    const info = await transporter.sendMail({
-      from: getFrom(),
-      to: email,
-      subject: 'HodlOwl — Verify Your Email Address',
-      html: buildVerificationEmailHtml(code),
+    // Fire verification email asynchronously — don't block the response
+    log('REG', `Step 2 — Firing verification email asynchronously to ${email.slice(0, 6)}...`)
+    sendVerificationEmail(email, code).catch((sendErr) => {
+      warn('REG', `Async email send failed | error=${sendErr.message} | wallet=${normalizedAddress.slice(0, 16)}... | email=${email.slice(0, 6)}...`, sendErr)
     })
-    log('REG', `Verification email sent | messageId=${info.messageId} | accepted=${info.accepted?.length || 0} | rejected=${info.rejected?.length || 0}`)
 
     const elapsed = Date.now() - startTime
-    log('REG', `<<< EXIT registerEmail SUCCESS | elapsed=${elapsed}ms`)
-    return { preferences, verificationSent: true }
+    log('REG', `<<< EXIT registerEmail | elapsed=${elapsed}ms | verificationSent=true (async)`)
+    return { preferences, verificationSent: true, verificationError: null }
   } catch (error) {
     const elapsed = Date.now() - startTime
     warn('REG', `<<< EXIT registerEmail FAILED | elapsed=${elapsed}ms | error=${error.message}`, error)
@@ -290,15 +311,10 @@ export async function resendVerificationCode(walletAddress) {
       { $set: { emailVerificationCode: code, emailVerificationExpiry: expiry } },
     )
 
-    log('RESEND', `Sending verification email to ${prefs.email.slice(0, 6)}...`)
-    const transporter = createTransporter()
-    const info = await transporter.sendMail({
-      from: getFrom(),
-      to: prefs.email,
-      subject: 'HodlOwl — Verify Your Email Address',
-      html: buildVerificationEmailHtml(code),
+    log('RESEND', `Firing verification email asynchronously to ${prefs.email.slice(0, 6)}...`)
+    sendVerificationEmail(prefs.email, code).catch((sendErr) => {
+      warn('RESEND', `Async email send failed | error=${sendErr.message} | wallet=${normalizedAddress.slice(0, 16)}...`, sendErr)
     })
-    log('RESEND', `Verification email resent | messageId=${info.messageId}`)
 
     const elapsed = Date.now() - startTime
     log('RESEND', `<<< EXIT resendVerificationCode SUCCESS | elapsed=${elapsed}ms`)

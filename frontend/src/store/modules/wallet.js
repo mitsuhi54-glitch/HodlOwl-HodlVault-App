@@ -24,15 +24,19 @@ const persisted = loadPersistedWallet()
 
 const state = {
   address: persisted?.address ?? null,
+  addresses: persisted?.addresses ?? [],
   publicKey: persisted?.publicKey ?? null,
   privateKey: persisted?.privateKey ?? null,
 }
 
 const mutations = {
   SET_WALLET(state, payload) {
+    const oldAddr = state.address
     state.address = payload.address ?? null
+    state.addresses = Array.isArray(payload.addresses) ? payload.addresses : (state.address ? [state.address] : [])
     state.publicKey = payload.publicKey ?? null
     state.privateKey = payload.privateKey ?? null
+    console.log(`[BAL_TRACE] Vuex SET_WALLET | oldAddress: "${oldAddr}" → newAddress: "${state.address}" | addresses count=${state.addresses.length}`)
     if (typeof localStorage !== 'undefined') {
       try {
         if (state.address || state.publicKey) {
@@ -40,6 +44,7 @@ const mutations = {
             'hodl-vault-wallet',
             JSON.stringify({
               address: state.address,
+              addresses: state.addresses,
               publicKey: state.publicKey,
             }),
           )
@@ -60,6 +65,7 @@ const mutations = {
             'hodl-vault-wallet',
             JSON.stringify({
               address: state.address,
+              addresses: state.addresses,
               publicKey: state.publicKey,
             }),
           )

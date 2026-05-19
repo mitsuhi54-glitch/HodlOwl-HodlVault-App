@@ -590,46 +590,174 @@ export const getVaultStats = async (req, res) => {
   }
 }
 
+const RANKING_TOP_LIMIT = 10
+
+function mapLockedBCHRanking(entries) {
+  return entries.map((entry, index) => ({
+    rank: index + 1,
+    walletAddress: entry.walletAddress,
+    totalBalance: entry.totalBalance,
+    totalBalanceBCH: entry.totalBalance / 100000000,
+    vaultCount: entry.vaultCount,
+  }))
+}
+
+function mapVaultCountRanking(entries) {
+  return entries.map((entry, index) => ({
+    rank: index + 1,
+    walletAddress: entry.walletAddress,
+    vaultCount: entry.vaultCount,
+    totalBalance: entry.totalBalance,
+    totalBalanceBCH: entry.totalBalance / 100000000,
+  }))
+}
+
+async function getWalletRanks(walletAddress) {
+  const normalized = walletAddress.toLowerCase()
+
+  const [allByLocked, allByVaultCount] = await Promise.all([
+    Vault.aggregate([
+      {
+        $group: {
+          _id: '$walletAddress',
+          totalBalance: { $sum: '$balance' },
+          vaultCount: { $sum: 1 },
+        },
+      },
+      { $sort: { totalBalance: -1, vaultCount: -1 } },
+    ]),
+    Vault.aggregate([
+      {
+        $group: {
+          _id: '$walletAddress',
+          vaultCount: { $sum: 1 },
+          totalBalance: { $sum: '$balance' },
+        },
+      },
+      { $sort: { vaultCount: -1, totalBalance: -1 } },
+    ]),
+  ])
+
+  const lockedIdx = allByLocked.findIndex((e) => e._id === normalized)
+  const vaultIdx = allByVaultCount.findIndex((e) => e._id === normalized)
+
+  return {
+    lockedFund:
+      lockedIdx >= 0
+        ? {
+            rank: lockedIdx + 1,
+            totalBalance: allByLocked[lockedIdx].totalBalance,
+            totalBalanceBCH: allByLocked[lockedIdx].totalBalance / 100000000,
+            vaultCount: allByLocked[lockedIdx].vaultCount,
+          }
+        : null,
+    vaultCreated:
+      vaultIdx >= 0
+        ? {
+            rank: vaultIdx + 1,
+            vaultCount: allByVaultCount[vaultIdx].vaultCount,
+            totalBalance: allByVaultCount[vaultIdx].totalBalance,
+            totalBalanceBCH: allByVaultCount[vaultIdx].totalBalance / 100000000,
+          }
+        : null,
+  }
+}
+
 /**
- * Get global vault statistics (across ALL users)
+ * Get global vault statistics and top-user rankings (across ALL users)
  */
 export const getGlobalStats = async (req, res) => {
   try {
-    const result = await Vault.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalBalance: { $sum: '$balance' },
-          activeVaults: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
-          withdrawnVaults: { $sum: { $cond: [{ $eq: ['$status', 'withdrawn'] }, 1, 0] } },
-          totalVaults: { $sum: 1 },
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || RANKING_TOP_LIMIT, 1),
+      50,
+    )
+
+    const [globalResult, lockedRankingRaw, vaultCountRankingRaw] = await Promise.all([
+      Vault.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalBalance: { $sum: '$balance' },
+            activeVaults: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+            withdrawnVaults: { $sum: { $cond: [{ $eq: ['$status', 'withdrawn'] }, 1, 0] } },
+            totalVaults: { $sum: 1 },
+          },
         },
-      },
+      ]),
+      Vault.aggregate([
+        {
+          $group: {
+            _id: '$walletAddress',
+            totalBalance: { $sum: '$balance' },
+            vaultCount: { $sum: 1 },
+          },
+        },
+        { $sort: { totalBalance: -1, vaultCount: -1 } },
+        { $limit: limit },
+        {
+          $project: {
+            _id: 0,
+            walletAddress: '$_id',
+            totalBalance: 1,
+            vaultCount: 1,
+          },
+        },
+      ]),
+      Vault.aggregate([
+        {
+          $group: {
+            _id: '$walletAddress',
+            vaultCount: { $sum: 1 },
+            totalBalance: { $sum: '$balance' },
+          },
+        },
+        { $sort: { vaultCount: -1, totalBalance: -1 } },
+        { $limit: limit },
+        {
+          $project: {
+            _id: 0,
+            walletAddress: '$_id',
+            vaultCount: 1,
+            totalBalance: 1,
+          },
+        },
+      ]),
     ])
 
-    if (result.length === 0) {
-      return res.status(200).json({
-        message: 'Global vault statistics retrieved successfully',
-        stats: {
-          totalLockedBCH: 0,
-          activeVaults: 0,
-          totalTargetPriceReached: 0,
-        },
-      })
+    const data = globalResult[0] || {
+      totalBalance: 0,
+      activeVaults: 0,
+      withdrawnVaults: 0,
+      totalVaults: 0,
     }
 
-    const data = result[0]
+    const walletQuery = typeof req.query.wallet === 'string' ? req.query.wallet.trim() : ''
+    let userRanks = null
+    if (walletQuery) {
+      userRanks = await getWalletRanks(walletQuery)
+    }
+
     res.status(200).json({
+      success: true,
       message: 'Global vault statistics retrieved successfully',
+      limit,
       stats: {
-        totalLockedBCH: ((data.totalBalance || 0) / 100000000),
+        totalLockedBCH: (data.totalBalance || 0) / 100000000,
+        totalVaults: data.totalVaults || 0,
         activeVaults: data.activeVaults || 0,
         totalTargetPriceReached: data.withdrawnVaults || 0,
       },
+      rankings: {
+        lockedBCH: mapLockedBCHRanking(lockedRankingRaw),
+        vaultCount: mapVaultCountRanking(vaultCountRankingRaw),
+      },
+      userRanks,
     })
   } catch (error) {
     console.error('Get global stats error:', error)
     res.status(500).json({
+      success: false,
       message: 'Internal server error',
       error: error.message,
     })

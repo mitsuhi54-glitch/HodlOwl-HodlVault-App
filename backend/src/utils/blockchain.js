@@ -44,13 +44,21 @@ export async function getAddressBalance(address) {
   const hostnames = [null, ...getFallbackHostnames(network)]
   let lastError = null
 
+  console.log(`[BAL_TRACE] getAddressBalance | address="${address}" | network=${network} | hostnames=${JSON.stringify(hostnames)}`)
+
   for (const hostname of hostnames) {
     try {
       const provider = getQueryProvider(network, hostname)
+      const t0 = performance.now()
       const utxos = await provider.getUtxos(address)
-      return utxos.reduce((sum, u) => sum + BigInt(u.satoshis), 0n)
+      const elapsed = (performance.now() - t0).toFixed(1)
+      const totalSats = utxos.reduce((sum, u) => sum + BigInt(u.satoshis), 0n)
+      const utxoDetails = utxos.map(u => `{txid:${u.txid?.slice(0,12)}… sats:${u.satoshis}}`)
+      console.log(`[BAL_TRACE] getAddressBalance | hostname="${hostname || 'default'}" | ${utxos.length} UTXOs | ${utxoDetails.join(', ')} | total=${Number(totalSats)} sats | took=${elapsed}ms`)
+      return totalSats
     } catch (e) {
       lastError = e
+      console.log(`[BAL_TRACE] getAddressBalance | hostname="${hostname || 'default'}" FAILED: ${e.message}`)
     }
   }
 

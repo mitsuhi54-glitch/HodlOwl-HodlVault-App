@@ -423,6 +423,65 @@ footer, .q-footer {
   .container { padding: 0 16px; }
 }
 
+/* Create vault (dashboard): header — compact slideshow, tagline one line, no vertical stretch */
+.create-vault-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.create-vault-header__titles {
+  flex: 1;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.create-vault-header__titles h1 {
+  line-height: 1.15;
+  margin: 0;
+}
+
+.create-vault-header__tagline {
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 6px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.create-vault-header__slideshow.slideshow-container {
+  width: 260px;
+  flex-shrink: 0;
+  height: 88px !important; /* ~ title + one tagline line; avoids over-stretching images */
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.1);
+  background: var(--color-surface-input);
+}
+
+/* Global .slide defaults to opacity: 0 for full-page carousel; show stacked images here */
+.create-vault-header__slideshow .slide {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .create-vault-header {
+    flex-direction: column;
+  }
+
+  .create-vault-header__tagline {
+    white-space: normal;
+  }
+
+  .create-vault-header__slideshow.slideshow-container {
+    width: 100% !important;
+    height: 100px !important;
+  }
+}
+
 /* SLIDESHOW STYLES */
 .slideshow-container {
   position: relative;
@@ -1203,6 +1262,54 @@ input:checked + .toggle-slider:before {
   .q-dialog .q-card {
     background-color: var(--color-page) !important;
   }
+}
+
+/* Dashboard: Hodler Rank card */
+.hodler-rank-card__message {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.hodler-rank-card__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.hodler-rank-card__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.hodler-rank-card__medal-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  flex-shrink: 0;
+}
+
+.hodler-rank-card__medal {
+  font-size: 20px;
+  color: var(--color-neon);
+  filter: drop-shadow(0 0 6px var(--color-neon-dim));
+}
+
+.hodler-rank-card__rank {
+  font-size: 18px;
+  font-weight: 700;
+  min-width: 2.25rem;
+  flex-shrink: 0;
+}
+
+.hodler-rank-card__type {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
 }
 
 /* Active vaults empty state (UI model) */

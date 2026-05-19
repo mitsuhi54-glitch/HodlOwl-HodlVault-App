@@ -60,6 +60,8 @@ let currentSession = null
 let isConnecting = false // Prevent multiple simultaneous connections
 let connectionPromise = null // Track ongoing connection attempts
 let connectionStatusInterval = null // Periodic status checker
+let consecutiveFailures = 0 // Track consecutive status check failures
+let visibilityHandler = null // Page Visibility listener reference
 
 const BITCOIN_SIGNED_MESSAGE_PREFIX = (() => {
   const encoder = new TextEncoder()
@@ -90,35 +92,71 @@ function concatBytes(...parts) {
   return out
 }
 
-// Periodic connection status checker - runs less frequently to avoid overhead
+// Periodic connection status checker - runs less frequently to avoid overhead.
+// Skips checks when the tab is hidden to prevent false disconnects caused by
+// browser throttling of WebSocket connections in background/inactive tabs.
 function startConnectionStatusChecker(store) {
   if (connectionStatusInterval) {
     clearInterval(connectionStatusInterval)
   }
 
+  consecutiveFailures = 0
+
+  // Listen for page visibility changes — reset failures when tab becomes visible
+  if (!visibilityHandler) {
+    visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        consecutiveFailures = 0
+      }
+    }
+    document.addEventListener('visibilitychange', visibilityHandler)
+  }
+
   connectionStatusInterval = setInterval(async () => {
+    // Skip checks entirely when tab is hidden — prevents false disconnects
+    // from browser-throttled connections on inactive tabs
+    if (document.visibilityState === 'hidden') return
+
     if (currentSession && signClient) {
       try {
-        // Quick check if session still exists without full validation
         const session = signClient.session.get(currentSession.topic)
         if (!session || session.expiry * 1000 < Date.now()) {
-          console.log('Connection status checker: Session no longer valid, clearing state')
+          consecutiveFailures++
+          if (consecutiveFailures >= 3) {
+            console.log('Connection status checker: Session no longer valid after 3 checks, clearing state')
+            currentSession = null
+            consecutiveFailures = 0
+            if (store) {
+              store.commit('wallet/CLEAR_WALLET')
+            }
+          }
+        } else {
+          consecutiveFailures = 0
+        }
+      } catch {
+        consecutiveFailures++
+        if (consecutiveFailures >= 3) {
+          console.log('Connection status checker: Session unreachable after 3 attempts, clearing state')
           currentSession = null
+          consecutiveFailures = 0
           if (store) {
             store.commit('wallet/CLEAR_WALLET')
           }
         }
-      } catch {
-        // Silent fail - don't spam console
       }
     }
-  }, 30000) // Check every 30 seconds instead of 5
+  }, 60000) // Check every 60 seconds
 }
 
 function stopConnectionStatusChecker() {
   if (connectionStatusInterval) {
     clearInterval(connectionStatusInterval)
     connectionStatusInterval = null
+  }
+  consecutiveFailures = 0
+  if (visibilityHandler) {
+    document.removeEventListener('visibilitychange', visibilityHandler)
+    visibilityHandler = null
   }
 }
 
@@ -428,6 +466,8 @@ export function initializeWalletConnect(store) {
               console.log(
                 `[WC TIMING] Step 4: Session synced (${(performance.now() - syncStart).toFixed(2)}ms)`,
               )
+              // Ensure status checker is running after restoring session
+              startConnectionStatusChecker(store)
               const totalTime = performance.now() - connectStart
               console.log(
                 `[WC TIMING] === TOTAL: ${totalTime.toFixed(2)}ms (using existing session) ===`,
@@ -501,8 +541,11 @@ export function initializeWalletConnect(store) {
         const syncStart = performance.now()
         await syncSessionToStore(store, client, session)
         console.log(
-          `[WC TIMING] Step 8: Session synced to store (${(performance.now() - syncStart).toFixed(2)}ms)`,
+          `[WC TIMING] Step 4: Session synced to store (${(performance.now() - syncStart).toFixed(2)}ms)`,
         )
+
+        // Restart the connection status checker after successful reconnect
+        startConnectionStatusChecker(store)
 
         const totalTime = performance.now() - connectStart
         console.log(`[WC TIMING] === TOTAL: ${totalTime.toFixed(2)}ms (new connection) ===`)
@@ -532,10 +575,14 @@ export function initializeWalletConnect(store) {
     },
 
     async disconnect() {
-      // Clear state immediately for responsive UI
-      currentSession = null
       isConnecting = false
       connectionPromise = null
+
+      // Save session topic before clearing state
+      const sessionTopic = currentSession?.topic
+
+      // Clear state immediately for responsive UI
+      currentSession = null
 
       if (store) {
         store.commit('wallet/CLEAR_WALLET')
@@ -545,11 +592,8 @@ export function initializeWalletConnect(store) {
       stopConnectionStatusChecker()
 
       // Fire and forget disconnect - don't wait for network
-      if (signClient) {
-        const sessionTopic = currentSession?.topic
-        if (sessionTopic) {
-          signClient.disconnect({ topic: sessionTopic }).catch(() => {})
-        }
+      if (signClient && sessionTopic) {
+        signClient.disconnect({ topic: sessionTopic }).catch(() => {})
       }
     },
 
@@ -630,7 +674,21 @@ async function syncSessionToStore(store, client, session) {
       topic: session.topic,
       request: { method: 'bch_getAddresses', params: {} },
     })
-    const address = Array.isArray(addresses) && addresses.length ? addresses[0] : null
+    const addrCount = Array.isArray(addresses) ? addresses.length : 0
+    console.log(`[BAL_TRACE] bch_getAddresses returned ${addrCount} address(es)`)
+    const dedupedAddrs = []
+    if (addrCount > 0) {
+      for (let i = 0; i < addrCount; i++) {
+        const a = addresses[i]
+        // Strip leading "n-" prefix if present (Paytaca format)
+        const clean = typeof a === 'string' ? a.replace(/^\d+-/, '') : a
+        console.log(`[BAL_TRACE]   address[${i}] raw="${a}" → clean="${clean}"`)
+        if (clean && !dedupedAddrs.includes(clean)) dedupedAddrs.push(clean)
+      }
+    }
+    const address = dedupedAddrs.length > 0 ? dedupedAddrs[0] : null
+    console.log(`[BAL_TRACE] ${dedupedAddrs.length} unique address(es):`, JSON.stringify(dedupedAddrs))
+    console.log(`[BAL_TRACE] Using address[0]: "${address}"`)
     console.log(
       `[WC TIMING] syncSessionToStore: bch_getAddresses took ${(performance.now() - addrStart).toFixed(2)}ms`,
     )
@@ -662,6 +720,7 @@ async function syncSessionToStore(store, client, session) {
       const commitStart = performance.now()
       store.commit('wallet/SET_WALLET', {
         address,
+        addresses: dedupedAddrs,
         publicKey,
         privateKey: null,
       })
@@ -682,7 +741,7 @@ async function syncSessionToStore(store, client, session) {
   }
 }
 
-async function restoreSessionIfAny(store) {
+export async function restoreSessionIfAny(store) {
   if (!store) return
   try {
     const client = await getSignClient(store)

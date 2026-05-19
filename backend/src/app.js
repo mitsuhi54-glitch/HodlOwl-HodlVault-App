@@ -11,8 +11,10 @@ import activityLogRouter from './routes/activity-log.route.js'
 import autoWithdrawalRouter from './routes/auto-withdrawal.route.js'
 import depositWatchRouter from './routes/deposit-watch.route.js'
 import sseRouter from './routes/sse.route.js'
+import walletRouter from './routes/wallet.route.js'
 
 // routes declaration
+app.use('/api/v1/wallet', walletRouter)
 app.use('/api/v1/vaults', vaultRouter)
 app.use('/api/v1/wallet/preferences', walletPreferencesRouter)
 app.use('/api/v1/activity-logs', activityLogRouter)

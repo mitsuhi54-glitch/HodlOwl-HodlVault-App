@@ -540,6 +540,7 @@ import {
 } from 'src/boot/onesignal'
 import { oneSignalApi } from 'src/services/onesignal-api'
 import { emailApi } from 'src/services/email-api'
+import { suggestDomainFix } from 'src/utils/email-utils'
 import { vaultApi } from 'src/services/api.service'
 
 export default defineComponent({
@@ -583,6 +584,7 @@ export default defineComponent({
       showVerifyCodeInput: false,
       verificationCode: '',
       verifyingCode: false,
+      resendCount: 0,
       // ✅ Auto-withdrawal toggle loading states
       togglingAutoWithdrawal: {},
     }
@@ -774,43 +776,85 @@ export default defineComponent({
      */
     async saveEmail() {
       if (!this.emailAddress) return
+      console.log(`[NotifDebug:page] saveEmail() called | email=${this.emailAddress.slice(0, 6)}...`)
+
+      const typo = suggestDomainFix(this.emailAddress)
+      if (typo) {
+        console.log(`[NotifDebug:page] Domain typo detected | typed=${typo.typed} | suggested=${typo.suggestion}`)
+        const confirmed = await new Promise((resolve) => {
+          this.$q.dialog({
+            title: 'Did you mean...',
+            message: `It looks like "<strong>${typo.typed}</strong>" might be a typo. Did you mean <strong>${typo.suggestion}</strong>?`,
+            html: true,
+            cancel: 'No, keep my email',
+            ok: { label: `Yes, use ${typo.suggestion.split('@')[1]}`, color: 'primary' },
+          }).onOk(() => resolve(true)).onCancel(() => resolve(false)).onDismiss(() => resolve(false))
+        })
+        if (confirmed) {
+          this.emailAddress = typo.suggestion
+          console.log(`[NotifDebug:page] Domain corrected | now=${this.emailAddress}`)
+        }
+      }
+
       this.savingEmail = true
       try {
+        console.time('[NotifDebug:page] saveEmail API call')
         const result = await emailApi.registerEmail(this.emailAddress)
+        console.timeEnd('[NotifDebug:page] saveEmail API call')
+        console.log(`[NotifDebug:page] saveEmail response | verificationSent=${result.verificationSent} | verificationError=${result.verificationError || 'none'}`)
+
         this.savedEmail = result.email
         this.emailVerified = false
         this.emailAddress = ''
         this.emailNotificationsEnabled = true
         this.showVerifyCodeInput = true
         this.verificationCode = ''
-        this.$q.notify({
-          type: 'positive',
-          message: 'Verification code sent to your email',
-        })
+        this.resendCount = 0
+
+        if (result.verificationSent) {
+          this.$q.notify({
+            type: 'positive',
+            message: 'Verification code sent to your email',
+          })
+        } else {
+          this.$q.notify({
+            type: 'warning',
+            message: 'Email saved but verification email could not be sent. Check SMTP settings or click Resend.',
+            timeout: 8000,
+          })
+        }
       } catch (err) {
+        const errMsg = err?.response?.data?.message || err.message || 'Unknown error'
+        console.error(`[NotifDebug:page] saveEmail failed | error=${errMsg} | responseStatus=${err?.response?.status || 'N/A'}`, err)
         this.$q.notify({
           type: 'negative',
-          message: err?.response?.data?.message || 'Failed to save email',
+          message: `Failed to save email: ${errMsg}`,
+          timeout: 8000,
         })
       } finally {
         this.savingEmail = false
+        console.log(`[NotifDebug:page] saveEmail() complete | savedEmail=${this.savedEmail ? this.savedEmail.slice(0, 6) + '...' : 'null'}`)
       }
     },
 
     async verifyCode() {
       if (this.verificationCode.length !== 6) return
+      console.log(`[NotifDebug:page] verifyCode() called | code=${this.verificationCode}`)
       this.verifyingCode = true
       try {
         await emailApi.verifyEmailCode(this.verificationCode)
+        console.log('[NotifDebug:page] verifyCode success')
         this.emailVerified = true
         this.showVerifyCodeInput = false
         this.verificationCode = ''
+        this.resendCount = 0
         this.$q.notify({
           type: 'positive',
           message: 'Email verified successfully!',
         })
       } catch (err) {
         const msg = err?.response?.data?.message || 'Verification failed'
+        console.error(`[NotifDebug:page] verifyCode failed | error=${msg}`, err)
         if (msg.toLowerCase().includes('expired')) {
           this.$q.notify({
             type: 'warning',
@@ -824,19 +868,33 @@ export default defineComponent({
         }
       } finally {
         this.verifyingCode = false
+        console.log(`[NotifDebug:page] verifyCode() complete | emailVerified=${this.emailVerified}`)
       }
     },
 
     async resendCode() {
+      console.log('[NotifDebug:page] resendCode() called')
+      this.resendCount++
+      console.log(`[NotifDebug:page] resendCount=${this.resendCount}`)
+      if (this.resendCount >= 2) {
+        this.$q.notify({
+          type: 'warning',
+          message: 'Double-check your email address for typos before trying again.',
+          icon: 'email',
+          timeout: 6000,
+        })
+      }
       this.verifyingCode = true
       try {
         await emailApi.resendVerificationCode()
+        console.log('[NotifDebug:page] resendCode success')
         this.verificationCode = ''
         this.$q.notify({
           type: 'positive',
           message: 'New verification code sent',
         })
-      } catch {
+      } catch (err) {
+        console.error(`[NotifDebug:page] resendCode failed | error=${err.message}`, err)
         this.$q.notify({
           type: 'negative',
           message: 'Failed to resend code',
@@ -850,8 +908,10 @@ export default defineComponent({
      * Remove email address
      */
     async removeEmail() {
+      console.log('[NotifDebug:page] removeEmail() called')
       try {
         await emailApi.unregisterEmail()
+        console.log('[NotifDebug:page] removeEmail success')
         this.savedEmail = null
         this.emailNotificationsEnabled = false
         this.$q.notify({
@@ -861,7 +921,8 @@ export default defineComponent({
         this.emailVerified = false
         this.showVerifyCodeInput = false
         this.verificationCode = ''
-      } catch {
+      } catch (err) {
+        console.error(`[NotifDebug:page] removeEmail failed | error=${err.message}`, err)
         this.$q.notify({
           type: 'negative',
           message: 'Failed to remove email',

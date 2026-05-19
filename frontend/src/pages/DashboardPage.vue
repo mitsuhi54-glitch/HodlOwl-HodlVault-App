@@ -1,399 +1,828 @@
 <template>
   <main class="container container--page-dashboard">
     <div class="page-grid">
-
-        <!-- LEFT SIDEBAR -->
-        <aside>
-          <div class="card card--elevated" style="padding: 20px;">
-            <span class="label-tiny">Wallet Balance</span>
-            <div style="font-size: 24px; font-weight: 700; margin-top: 4px; display: flex; align-items: baseline; gap: 4px;">
-              <span class="val-sync-balance" :data-sats="walletSats">{{ formatBalance(walletSats) }}</span>
-              <span class="text-neon val-sync-unit" style="font-size: 14px; font-weight: 700;">{{ unit }}</span>
-            </div>
-            <div class="text-muted text-mono" style="font-size: 12px; margin-top: 2px;">
-              {{ phpBalance }}
-            </div>
+      <!-- LEFT SIDEBAR -->
+      <aside>
+        <div class="card card--elevated hodler-rank-card" style="padding: 20px">
+          <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;">
+            <span class="label-tiny" style="margin-bottom: 0;">Hodler Rank</span>
+            <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">All Time</span>
           </div>
 
-          <div class="card card--elevated" style="margin-top: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="label-tiny">Market Feed</span>
-              <button v-if="!priceLoading" class="btn btn--outline" style="padding: 4px 12px; font-size: 10px;" @click="refreshPrice">Refresh</button>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
-              <i v-if="priceLoading" class="material-icons text-muted" style="font-size: 16px;">sync</i>
-              <i v-else-if="oracleSuccess" class="material-icons text-neon" style="font-size: 16px;">check_circle</i>
-              <i v-else class="material-icons" style="color: #ffb300; font-size: 16px;">warning</i>
-              <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim);">Fetching oracle price...</span>
-              <span v-else-if="oracleSuccess" style="font-size: 12px; color: var(--color-neon);">Oracle online</span>
-              <span v-else style="font-size: 12px; color: #ffb300;">Oracle unavailable — refresh before deploying</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 10px;">
-              <span class="text-muted" style="font-size: 13px;">BCH Price (Oracle)</span>
-              <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim);">Loading...</span>
-              <span v-else-if="oracleSuccess" class="text-neon text-heading" style="font-size: 14px;">₱{{ formatPrice(currentBchPrice) }}</span>
-              <span v-else class="text-muted" style="font-size: 12px; cursor: pointer;" @click="refreshPrice">Offline — Tap to retry</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 8px;">
-              <span class="text-muted" style="font-size: 13px;">Network Fee</span>
-              <span style="color: #ffb800; font-family: var(--font-mono); font-size: 12px;">1 sat/B</span>
-            </div>
-            <div v-if="walletConnected && vaults.length > 0" style="margin-top: 12px; border-top: 1px solid var(--color-border); padding-top: 12px;">
-              <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                <span class="text-muted">Avg Progress</span>
-                <span class="text-neon" style="font-family: var(--font-mono);">{{ avgProgress }}%</span>
-              </div>
-            </div>
+          <div v-if="!walletConnected" class="hodler-rank-card__message text-muted">
+            Connect your wallet to see your leaderboard rank.
           </div>
 
-          <div class="card card--elevated portfolio-summary" style="padding-bottom: 20px; margin-top: 16px;">
-            <div v-if="!walletConnected" class="portfolio-view-disconnected" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 0; text-align: center;">
-              <i class="material-icons" style="font-size: 48px; color: var(--color-text-dim); margin-bottom: 16px;">account_balance_wallet</i>
-              <p style="font-size: 14px; margin-bottom: 16px; color: var(--color-text-muted);">Connect your wallet to view portfolio.</p>
-            </div>
-
-            <div v-else class="portfolio-view-connected">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <div class="portfolio-summary__title label-tiny" style="color: var(--color-text); font-weight: 700; margin-bottom: 0;">Portfolio Summary</div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <span style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase;">Display:</span>
-                  <select class="unit-selector balance-unit-sync" v-model="unit">
-                    <option value="sats">sats</option>
-                    <option value="mBCH">mBCH</option>
-                    <option value="BCH">BCH</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="portfolio-summary__stats-grid">
-                <div class="portfolio-summary__stat-item portfolio-summary__stat-item--flex">
-                  <span class="portfolio-summary__label">Total Locked</span>
-                  <div style="display: flex; align-items: baseline; gap: 4px;">
-                    <span class="portfolio-summary__value portfolio-summary__value--neon val-sync-balance" :data-sats="totalLockedSats" style="font-size: 20px;">{{ formatBalance(totalLockedSats) }}</span>
-                    <span class="text-mono val-sync-unit" style="font-size: 10px; color: var(--color-neon); font-weight: 700;">{{ unit }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="loadingVaults" style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 16px; padding-top: 12px;">
-                <span style="font-size: 12px; color: var(--color-text-dim);">Loading vaults...</span>
-              </div>
-
-              <div v-else style="border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 16px; padding-top: 12px; display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; gap: 24px;">
-                  <div class="portfolio-summary__stat-item">
-                    <span class="portfolio-summary__label">Vaults</span>
-                    <span class="portfolio-summary__value">{{ vaults.length }}</span>
-                  </div>
-                  <div class="portfolio-summary__stat-item">
-                    <span class="portfolio-summary__label">Ready</span>
-                    <span class="portfolio-summary__value portfolio-summary__value--neon">{{ readyCount }}</span>
-                  </div>
-                </div>
-                <button class="portfolio-summary__activity-btn" style="margin-top: 0;" @click="showActivityModal = true; loadActivityHistory()">
-                  <i class="material-icons" style="font-size: 14px;">history</i>
-                  Activity
-                </button>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        <!-- CENTER COLUMN: Create Vault Form -->
-        <section id="create-vault-section">
-          <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px;">
-            <div>
-              <h1 style="font-size: 32px; display: inline-block;">CREATE <span class="text-neon">HODL</span> VAULT</h1>
-              <p class="text-muted" style="font-size: 14px; margin-top: 4px;">Set your target price and secure your Bitcoin Cash.</p>
-            </div>
-            <div class="slideshow-container" style="width: 260px; height: 72px; position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--color-border); box-shadow: 0 0 15px rgba(0, 255, 136, 0.1); background: var(--color-surface-input);">
-              <div class="slide" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-                <img src="https://images.unsplash.com/photo-1639762681485-074b7f4ec651?auto=format&fit=crop&q=80&w=400" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; mix-blend-mode: screen;">
-              </div>
-              <div class="slide" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-                <img src="https://images.unsplash.com/photo-1618044733300-9472054094ee?auto=format&fit=crop&q=80&w=400" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; mix-blend-mode: screen;">
-              </div>
-              <div class="slide" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-                <img src="https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=400" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; mix-blend-mode: screen;">
-              </div>
-            </div>
+          <div v-else-if="loadingHodlerRank" class="hodler-rank-card__message text-muted">
+            Loading rank...
           </div>
 
-          <div class="card" style="padding: 28px; border: 1px solid var(--color-border);">
-            <div style="grid-template-columns: 1fr 1fr; display: grid; gap: 20px;">
-              <div class="field">
-                <label class="label-tiny">Vault Name</label>
-                <q-input v-model="vaultName" placeholder="My Alpha HODL" outlined dense dark class="custom-input" />
-              </div>
-              <div class="field">
-                <label class="label-tiny">Target Price (PHP)</label>
-                <q-input v-model="targetPrice" type="number" outlined dense dark class="custom-input" prefix="₱" />
-              </div>
-            </div>
-
-            <div class="field">
-              <label class="label-tiny">Amount to Lock ({{ unit }})</label>
-              <q-input v-model="lockAmount" type="number" step="0.001" placeholder="5.000" outlined dense dark class="custom-input" :suffix="unit" />
-            </div>
-
-            <div v-if="currentBchPrice" class="field">
-              <label class="label-tiny">Preset Targets</label>
-              <div class="chip-row">
-                <div v-for="preset in priceTargetPresets" :key="preset.key" class="chip" :class="{ active: selectedPreset === preset.key }" @click="selectPreset(preset.key, preset.multiplier)">
-                  {{ preset.label }}
-                  <span style="opacity: 0.7; margin-left: 2px;">(+{{ preset.percent }}%)</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="field" style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
-              <q-toggle v-model="autoWithdrawal" color="positive" />
-              <span style="font-size: 14px;">Enable Auto-Withdrawal</span>
-            </div>
-
-            <q-btn
-              class="btn btn--primary btn--full"
-              style="height: 56px; margin-top: 24px;"
-              :label="deploying ? 'Deploying...' : 'Deploy Smart Contract'"
-              :loading="deploying"
-              @click="deployContract"
-              :disable="!walletConnected || !canDeploy"
-            />
+          <div v-else-if="hodlerRankRows.length === 0" class="hodler-rank-card__message text-muted">
+            Create a vault to enter the rankings.
           </div>
-        </section>
 
-        <!-- RIGHT SIDEBAR: Active Vaults -->
-        <aside style="display: flex; flex-direction: column; gap: 0;">
-          <VaultsEmptyState
-            v-if="showVaultsEmptyState"
-            @action="onVaultsEmptyStateAction"
-          />
-
-
-          <div v-else class="active-vaults-view-connected">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
-              <h2 class="label-tiny" style="margin: 0;">
-                Active Vaults
-              </h2>
-            </div>
-
-            <div id="vaults-list">
-              <div v-if="loadingVaults" style="text-align: center; padding: 40px 20px; color: var(--color-text-dim); font-size: 12px;">
-                Loading vaults...
-              </div>
-
-              <div v-else-if="backendError" style="text-align: center; padding: 40px 20px;">
-                <i class="material-icons" style="font-size: 32px; color: var(--color-text-dim);">cloud_off</i>
-                <p style="font-size: 12px; color: var(--color-text-dim); margin-top: 8px;">{{ backendError }}</p>
-                <button class="btn btn--outline" style="margin-top: 12px; padding: 6px 16px; font-size: 11px;" @click="loadVaults">Retry</button>
-              </div>
-
-              <div v-for="(vault, index) in vaults" :key="vault.id || index" class="vault-card" @click="onVaultCardClick($event, vault)">
-                <div class="vault-card__header">
-                  <div class="vault-card__avatar" :class="canVaultWithdraw(vault) ? 'vault-card__avatar--ready' : 'vault-card__avatar--hodl'">
-                    <i class="material-icons">{{ canVaultWithdraw(vault) ? 'lock_open' : 'lock' }}</i>
-                  </div>
-                  <div class="vault-card__title-area">
-                    <div class="vault-card__name">{{ vault.name || `Vault #${(vault.contractAddress || '').slice(-8)}` }}</div>
-                  </div>
-                  <i class="material-icons vault-card__arrow">arrow_forward</i>
-                </div>
-
-                <div class="vault-card__metrics">
-                  <div>
-                    <div class="vault-card__metric-label">Balance</div>
-                    <div class="vault-card__metric-value">
-                      <span class="val-sync-balance" :data-sats="vault.balance || 0">{{ formatBalance(vault.balance || 0) }}</span>
-                      <span class="val-sync-unit" style="font-size: 0.8em; color: var(--color-neon); opacity: 0.8;">{{ unit }}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="vault-card__metric-label">Target Price</div>
-                    <div class="vault-card__metric-value">₱{{ formatPrice(vault.priceTarget) }}</div>
-                  </div>
-                </div>
-
-                <div class="vault-card__meta">Created: {{ formatDate(vault.createdAt) }}</div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <div class="status-chip" :class="canVaultWithdraw(vault) ? 'status-chip--ready' : 'status-chip--hodl'">
-                    <i class="material-icons" style="font-size: 14px;">{{ canVaultWithdraw(vault) ? 'check_circle' : 'lock' }}</i>
-                    {{ canVaultWithdraw(vault) ? 'Ready to Withdraw' : 'HODLing' }}
-                  </div>
-                  <div class="vault-card__actions" style="display: flex; align-items: center; gap: 8px;" @click.stop>
-                    <span class="badge--auto" :title="vault.autoWithdrawal ? 'Auto-withdrawal enabled' : 'Auto-withdrawal disabled'" :style="{ opacity: vault.autoWithdrawal ? 1 : 0.5 }">Auto</span>
-                    <label class="toggle-switch" style="transform: scale(0.8); transform-origin: right;" @click.stop>
-                      <input type="checkbox" :checked="vault.autoWithdrawal" @click.stop @change="toggleAutoWithdraw(vault)">
-                      <span class="toggle-slider"></span>
-                    </label>
-                  </div>
-                </div>
-                <div class="vault-card__progress-container">
-                  <div class="vault-card__progress-fill" :class="canVaultWithdraw(vault) ? 'vault-card__progress-fill--ready' : 'vault-card__progress-fill--hodl'" :style="{ width: getVaultProgress(vault) + '%' }"></div>
-                </div>
-              </div>
+          <div v-else class="hodler-rank-card__rows">
+            <div
+              v-for="row in hodlerRankRows"
+              :key="row.key"
+              class="hodler-rank-card__row"
+              :title="row.showMedal ? `Top ${rankingTopLimit} hodler` : `Rank #${row.rank}`"
+            >
+              <span class="hodler-rank-card__medal-slot">
+                <i v-if="row.showMedal" class="material-icons hodler-rank-card__medal"
+                  >emoji_events</i
+                >
+              </span>
+              <span class="hodler-rank-card__rank text-neon text-mono">#{{ row.rank }}</span>
+              <span class="hodler-rank-card__type">{{ row.label }}</span>
             </div>
           </div>
-        </aside>
-      </div>
-
-      <!-- Floating Widget -->
-      <div class="floating-widget">
-        <div class="card card--neon" style="padding: 10px 16px; display: flex; align-items: center; gap: 8px; box-shadow: 0 0 20px var(--color-neon-dim);">
-          <i class="material-icons text-neon" style="font-size: 18px;">sensors</i>
-          <span class="text-mono text-neon" style="font-size: 10px; font-weight: 700; letter-spacing: 0.1em;">{{ walletConnected ? 'SECURE CONNECTION ACTIVE' : 'WALLET DISCONNECTED' }}</span>
         </div>
+
+        <div class="card card--elevated" style="margin-top: 16px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <span class="label-tiny">Market Feed</span>
+            <button
+              v-if="!priceLoading"
+              class="btn btn--outline"
+              style="padding: 4px 12px; font-size: 10px"
+              @click="refreshPrice"
+            >
+              Refresh
+            </button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px">
+            <i v-if="priceLoading" class="material-icons text-muted" style="font-size: 16px"
+              >sync</i
+            >
+            <i v-else-if="oracleSuccess" class="material-icons text-neon" style="font-size: 16px"
+              >check_circle</i
+            >
+            <i v-else class="material-icons" style="color: #ffb300; font-size: 16px">warning</i>
+            <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim)"
+              >Fetching oracle price...</span
+            >
+            <span v-else-if="oracleSuccess" style="font-size: 12px; color: var(--color-neon)"
+              >Oracle online</span
+            >
+            <span v-else style="font-size: 12px; color: #ffb300"
+              >Oracle unavailable — refresh before deploying</span
+            >
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 10px">
+            <span class="text-muted" style="font-size: 13px">BCH Price (Oracle)</span>
+            <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim)"
+              >Loading...</span
+            >
+            <span v-else-if="oracleSuccess" class="text-neon text-heading" style="font-size: 14px"
+              >₱{{ formatPrice(currentBchPrice) }}</span
+            >
+            <span
+              v-else
+              class="text-muted"
+              style="font-size: 12px; cursor: pointer"
+              @click="refreshPrice"
+              >Offline — Tap to retry</span
+            >
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 8px">
+            <span class="text-muted" style="font-size: 13px">Network Fee</span>
+            <span style="color: #ffb800; font-family: var(--font-mono); font-size: 12px"
+              >1 sat/B</span
+            >
+          </div>
+          <div
+            v-if="walletConnected && vaults.length > 0"
+            style="margin-top: 12px; border-top: 1px solid var(--color-border); padding-top: 12px"
+          >
+            <div style="display: flex; justify-content: space-between; font-size: 12px">
+              <span class="text-muted">Avg Progress</span>
+              <span class="text-neon" style="font-family: var(--font-mono)"
+                >{{ avgProgress }}%</span
+              >
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="card card--elevated portfolio-summary"
+          style="padding-bottom: 20px; margin-top: 16px"
+        >
+          <div
+            v-if="!walletConnected"
+            class="portfolio-view-disconnected"
+            style="
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 20px 0;
+              text-align: center;
+            "
+          >
+            <i
+              class="material-icons"
+              style="font-size: 48px; color: var(--color-text-dim); margin-bottom: 16px"
+              >account_balance_wallet</i
+            >
+            <p style="font-size: 14px; margin-bottom: 16px; color: var(--color-text-muted)">
+              Connect your wallet to view portfolio.
+            </p>
+          </div>
+
+          <div v-else class="portfolio-view-connected">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+              "
+            >
+              <div
+                class="portfolio-summary__title label-tiny"
+                style="color: var(--color-text); font-weight: 700; margin-bottom: 0"
+              >
+                Portfolio Summary
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px">
+                <span
+                  style="font-size: 10px; color: var(--color-text-dim); text-transform: uppercase"
+                  >Display:</span
+                >
+                <select class="unit-selector balance-unit-sync" v-model="unit">
+                  <option value="sats">sats</option>
+                  <option value="mBCH">mBCH</option>
+                  <option value="BCH">BCH</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="portfolio-summary__stats-grid">
+              <div class="portfolio-summary__stat-item portfolio-summary__stat-item--flex">
+                <span class="portfolio-summary__label">Total Locked</span>
+                <div style="display: flex; align-items: baseline; gap: 4px">
+                  <span
+                    class="portfolio-summary__value portfolio-summary__value--neon val-sync-balance"
+                    :data-sats="totalLockedSats"
+                    style="font-size: 20px"
+                    >{{ formatBalance(totalLockedSats) }}</span
+                  >
+                  <span
+                    class="text-mono val-sync-unit"
+                    style="font-size: 10px; color: var(--color-neon); font-weight: 700"
+                    >{{ unit }}</span
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="loadingVaults"
+              style="
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                margin-top: 16px;
+                padding-top: 12px;
+              "
+            >
+              <span style="font-size: 12px; color: var(--color-text-dim)">Loading vaults...</span>
+            </div>
+
+            <div
+              v-else
+              style="
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                margin-top: 16px;
+                padding-top: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+              "
+            >
+              <div style="display: flex; gap: 24px">
+                <div class="portfolio-summary__stat-item">
+                  <span class="portfolio-summary__label">Vaults</span>
+                  <span class="portfolio-summary__value">{{ vaults.length }}</span>
+                </div>
+                <div class="portfolio-summary__stat-item">
+                  <span class="portfolio-summary__label">Ready</span>
+                  <span class="portfolio-summary__value portfolio-summary__value--neon">{{
+                    readyCount
+                  }}</span>
+                </div>
+              </div>
+              <button
+                class="portfolio-summary__activity-btn"
+                style="margin-top: 0"
+                @click="showActivityModal = true; loadActivityHistory()"
+              >
+                <i class="material-icons" style="font-size: 14px">history</i>
+                Activity
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER COLUMN: Create Vault Form -->
+      <section id="create-vault-section">
+        <div class="create-vault-header">
+          <div class="create-vault-header__titles">
+            <h1 style="font-size: 32px; display: inline-block">
+              CREATE <span class="text-neon">HODL</span> VAULT
+            </h1>
+            <p class="text-muted create-vault-header__tagline">
+              Set your target price and secure your Bitcoin Cash.
+            </p>
+          </div>
+          <div class="slideshow-container create-vault-header__slideshow">
+            <div
+              class="slide"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+            >
+              <img
+                src="https://images.unsplash.com/photo-1639762681485-074b7f4ec651?auto=format&fit=crop&q=80&w=400"
+                style="
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  opacity: 0.8;
+                  mix-blend-mode: screen;
+                "
+              />
+            </div>
+            <div
+              class="slide"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+            >
+              <img
+                src="https://images.unsplash.com/photo-1618044733300-9472054094ee?auto=format&fit=crop&q=80&w=400"
+                style="
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  opacity: 0.8;
+                  mix-blend-mode: screen;
+                "
+              />
+            </div>
+            <div
+              class="slide"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+            >
+              <img
+                src="https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=400"
+                style="
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  opacity: 0.8;
+                  mix-blend-mode: screen;
+                "
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 28px; border: 1px solid var(--color-border)">
+          <div style="grid-template-columns: 1fr 1fr; display: grid; gap: 20px">
+            <div class="field">
+              <label class="label-tiny">Vault Name</label>
+              <q-input
+                v-model="vaultName"
+                placeholder="My Alpha HODL"
+                outlined
+                dense
+                dark
+                class="custom-input"
+              />
+            </div>
+            <div class="field">
+              <label class="label-tiny">Target Price (PHP)</label>
+              <q-input
+                v-model="targetPrice"
+                type="number"
+                outlined
+                dense
+                dark
+                class="custom-input"
+                prefix="₱"
+              />
+            </div>
+          </div>
+
+          <div v-if="currentBchPrice" class="field">
+            <label class="label-tiny">Preset Targets</label>
+            <div class="chip-row">
+              <div
+                v-for="preset in priceTargetPresets"
+                :key="preset.key"
+                class="chip"
+                :class="{ active: selectedPreset === preset.key }"
+                @click="selectPreset(preset.key, preset.multiplier)"
+              >
+                {{ preset.label }}
+                <span style="opacity: 0.7; margin-left: 2px">(+{{ preset.percent }}%)</span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="field"
+            style="display: flex; align-items: center; gap: 12px; margin-top: 12px"
+          >
+            <q-toggle v-model="autoWithdrawal" color="positive" />
+            <span style="font-size: 14px">Enable Auto-Withdrawal</span>
+          </div>
+
+          <q-btn
+            class="btn btn--primary btn--full"
+            style="height: 56px; margin-top: 24px"
+            :label="deploying ? 'Creating vault...' : 'Create Vault'"
+            :loading="deploying"
+            @click="deployContract"
+            :disable="!walletConnected || !canDeploy"
+          />
+        </div>
+      </section>
+
+      <!-- RIGHT SIDEBAR: Active Vaults -->
+      <aside style="display: flex; flex-direction: column; gap: 0">
+        <VaultsEmptyState v-if="showVaultsEmptyState" @action="onVaultsEmptyStateAction" />
+
+        <div v-else class="active-vaults-view-connected">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 12px;
+              padding: 0 4px;
+            "
+          >
+            <h2 class="label-tiny" style="margin: 0">Active Vaults</h2>
+          </div>
+
+          <div id="vaults-list">
+            <div
+              v-if="loadingVaults"
+              style="
+                text-align: center;
+                padding: 40px 20px;
+                color: var(--color-text-dim);
+                font-size: 12px;
+              "
+            >
+              Loading vaults...
+            </div>
+
+            <div v-else-if="backendError" style="text-align: center; padding: 40px 20px">
+              <i class="material-icons" style="font-size: 32px; color: var(--color-text-dim)"
+                >cloud_off</i
+              >
+              <p style="font-size: 12px; color: var(--color-text-dim); margin-top: 8px">
+                {{ backendError }}
+              </p>
+              <button
+                class="btn btn--outline"
+                style="margin-top: 12px; padding: 6px 16px; font-size: 11px"
+                @click="loadVaults()"
+              >
+                Retry
+              </button>
+            </div>
+
+            <template v-else>
+              <div
+                v-for="(vault, index) in vaults"
+                :key="vault.contractAddress || vault.id || index"
+                class="vault-card"
+                @click="onVaultCardClick($event, vault)"
+              >
+              <div class="vault-card__header">
+                <div
+                  class="vault-card__avatar"
+                  :class="
+                    canVaultWithdraw(vault)
+                      ? 'vault-card__avatar--ready'
+                      : 'vault-card__avatar--hodl'
+                  "
+                >
+                  <i class="material-icons">{{ canVaultWithdraw(vault) ? 'lock_open' : 'lock' }}</i>
+                </div>
+                <div class="vault-card__title-area">
+                  <div class="vault-card__name">
+                    {{ vault.name || `Vault #${(vault.contractAddress || '').slice(-8)}` }}
+                  </div>
+                </div>
+                <i class="material-icons vault-card__arrow">arrow_forward</i>
+              </div>
+
+              <div class="vault-card__metrics">
+                <div>
+                  <div class="vault-card__metric-label">Balance</div>
+                  <div class="vault-card__metric-value">
+                    <span class="val-sync-balance" :data-sats="vault.balance || 0">{{
+                      formatBalance(vault.balance || 0)
+                    }}</span>
+                    <span
+                      class="val-sync-unit"
+                      style="font-size: 0.8em; color: var(--color-neon); opacity: 0.8"
+                      >{{ unit }}</span
+                    >
+                  </div>
+                </div>
+                <div>
+                  <div class="vault-card__metric-label">Target Price</div>
+                  <div class="vault-card__metric-value">₱{{ formatPrice(vault.priceTarget) }}</div>
+                </div>
+              </div>
+
+              <div class="vault-card__meta">Created: {{ formatDate(vault.createdAt) }}</div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center">
+                <div
+                  class="status-chip"
+                  :class="canVaultWithdraw(vault) ? 'status-chip--ready' : 'status-chip--hodl'"
+                >
+                  <i class="material-icons" style="font-size: 14px">{{
+                    canVaultWithdraw(vault) ? 'check_circle' : 'lock'
+                  }}</i>
+                  {{ canVaultWithdraw(vault) ? 'Ready to Withdraw' : 'HODLing' }}
+                </div>
+                <div
+                  class="vault-card__actions"
+                  style="display: flex; align-items: center; gap: 8px"
+                  @click.stop
+                >
+                  <span
+                    class="badge--auto"
+                    :title="
+                      vault.autoWithdrawal ? 'Auto-withdrawal enabled' : 'Auto-withdrawal disabled'
+                    "
+                    :style="{ opacity: vault.autoWithdrawal ? 1 : 0.5 }"
+                    >Auto</span
+                  >
+                  <label
+                    class="toggle-switch"
+                    style="transform: scale(0.8); transform-origin: right"
+                    @click.stop
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="vault.autoWithdrawal"
+                      @click.stop
+                      @change="toggleAutoWithdraw(vault)"
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="vault-card__progress-container">
+                <div
+                  class="vault-card__progress-fill"
+                  :class="
+                    canVaultWithdraw(vault)
+                      ? 'vault-card__progress-fill--ready'
+                      : 'vault-card__progress-fill--hodl'
+                  "
+                  :style="{ width: getVaultProgress(vault) + '%' }"
+                ></div>
+              </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Floating Widget -->
+    <div class="floating-widget">
+      <div
+        class="card card--neon"
+        style="
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          box-shadow: 0 0 20px var(--color-neon-dim);
+        "
+      >
+        <i class="material-icons text-neon" style="font-size: 18px">sensors</i>
+        <span
+          class="text-mono text-neon"
+          style="font-size: 10px; font-weight: 700; letter-spacing: 0.1em"
+          >{{ walletConnected ? 'SECURE CONNECTION ACTIVE' : 'WALLET DISCONNECTED' }}</span
+        >
       </div>
+    </div>
   </main>
 
   <!-- Vault Management Modal -->
-    <q-dialog v-model="showVaultManageModal" persistent>
-      <q-card class="modal-content" style="max-width: 700px; width: 100%;">
-        <q-card-section class="modal-header">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <h3 style="margin: 0; font-size: 20px; text-transform: uppercase; font-family: var(--font-heading);">{{ manageVault?.name || 'Vault' }}</h3>
-            <div class="status-chip" :class="canVaultWithdraw(manageVault) ? 'status-chip--ready' : 'status-chip--hodl'" style="padding: 4px 12px;">
-              STATUS: {{ canVaultWithdraw(manageVault) ? 'READY TO WITHDRAW' : 'HODLING' }}
-            </div>
+  <q-dialog v-model="showVaultManageModal" persistent>
+    <q-card class="modal-content" style="max-width: 700px; width: 100%">
+      <q-card-section class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <h3
+            style="
+              margin: 0;
+              font-size: 20px;
+              text-transform: uppercase;
+              font-family: var(--font-heading);
+            "
+          >
+            {{ manageVault?.name || 'Vault' }}
+          </h3>
+          <div
+            class="status-chip"
+            :class="canVaultWithdraw(manageVault) ? 'status-chip--ready' : 'status-chip--hodl'"
+            style="padding: 4px 12px"
+          >
+            STATUS: {{ canVaultWithdraw(manageVault) ? 'READY TO WITHDRAW' : 'HODLING' }}
           </div>
-          <q-btn flat dense round icon="close" v-close-popup />
-        </q-card-section>
-        <q-card-section class="modal-body">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
-            <div class="card card--elevated" style="padding: 16px;">
-              <span class="label-tiny">Vault Statistics</span>
-              <div style="margin-top: 12px; display: grid; gap: 10px;">
-                <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                  <span class="text-muted">Locked Balance</span>
-                  <span style="font-weight: 700;">{{ manageVault ? formatBalance(manageVault.balance || 0) : '0.00' }} {{ unit }}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                  <span class="text-muted">Target Price</span>
-                  <span style="font-weight: 700;">₱{{ manageVault ? formatPrice(manageVault.priceTarget) : '0.00' }}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                  <span class="text-muted">Auto-Withdraw</span>
-                  <span class="text-neon">{{ manageVault?.autoWithdrawal ? 'ENABLED' : 'DISABLED' }}</span>
-                </div>
+        </div>
+        <q-btn flat dense round icon="close" v-close-popup />
+      </q-card-section>
+      <q-card-section class="modal-body">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px">
+          <div class="card card--elevated" style="padding: 16px">
+            <span class="label-tiny">Vault Statistics</span>
+            <div style="margin-top: 12px; display: grid; gap: 10px">
+              <div style="display: flex; justify-content: space-between; font-size: 12px">
+                <span class="text-muted">Locked Balance</span>
+                <span style="font-weight: 700"
+                  >{{ manageVault ? formatBalance(manageVault.balance || 0) : '0.00' }}
+                  {{ unit }}</span
+                >
               </div>
-            </div>
-
-            <div class="card card--elevated" style="padding: 16px;">
-              <span class="label-tiny">Oracle Feed</span>
-              <div style="margin-top: 12px; display: grid; gap: 8px;">
-                <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                  <span class="text-muted">Market Price</span>
-                  <span v-if="oracleSuccess" class="text-neon text-heading" style="font-size: 14px;">₱{{ formatPrice(currentBchPrice) }}</span>
-                  <span v-else class="text-muted" style="font-size: 12px;">Unavailable</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 12px;">
-                  <span class="text-muted">Gap to Target</span>
-                  <span v-if="manageVault && currentBchPrice" :style="{ color: manageGap >= 0 ? 'var(--color-neon)' : '#ffb300' }">{{ manageGap >= 0 ? '+' : '' }}{{ manageGap }}%</span>
-                  <span v-else class="text-muted">—</span>
-                </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px">
+                <span class="text-muted">Target Price</span>
+                <span style="font-weight: 700"
+                  >₱{{ manageVault ? formatPrice(manageVault.priceTarget) : '0.00' }}</span
+                >
               </div>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="card card--elevated">
-              <span class="label-tiny">Contract Details</span>
-              <div style="margin-top: 12px;">
-                <div class="text-muted" style="font-size: 10px; margin-bottom: 4px; text-transform: uppercase;">Smart Contract Address</div>
-                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--color-surface-input); padding: 10px; border-radius: 6px; border: 1px solid var(--color-border); word-break: break-all;">
-                  <code class="text-mono" style="font-size: 11px;">{{ manageVault?.contractAddress || 'N/A' }}</code>
-                  <i class="material-icons" style="font-size: 14px; color: var(--color-text-dim); cursor: pointer; margin-left: 8px;" @click="copyAddress">content_copy</i>
-                </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px">
+                <span class="text-muted">Auto-Withdraw</span>
+                <span class="text-neon">{{
+                  manageVault?.autoWithdrawal ? 'ENABLED' : 'DISABLED'
+                }}</span>
               </div>
-            </div>
-
-            <div class="card card--elevated" @click="showQrModal = true" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; cursor: pointer;">
-              <div style="width: 80px; height: 80px; background: white; padding: 4px; border-radius: 4px;">
-                <img :src="manageQrCodeUrl" alt="QR Code" style="width: 100%; height: 100%;" />
-              </div>
-              <span class="text-muted" style="font-size: 10px; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: bold;">Deposit via QR</span>
             </div>
           </div>
 
-          <div style="margin-top: 24px; display: flex; gap: 12px;">
-            <q-btn
-              class="btn btn--primary"
-              style="flex: 1; font-size: 12px; padding: 12px;"
-              :label="canVaultWithdraw(manageVault) ? 'Withdraw Funds (Unlocked)' : 'Vault Locked'"
-              :disable="!canVaultWithdraw(manageVault) || withdrawing"
-              :loading="withdrawing"
-              @click="onWithdraw"
-            />
+          <div class="card card--elevated" style="padding: 16px">
+            <span class="label-tiny">Oracle Feed</span>
+            <div style="margin-top: 12px; display: grid; gap: 8px">
+              <div style="display: flex; justify-content: space-between; font-size: 12px">
+                <span class="text-muted">Market Price</span>
+                <span v-if="oracleSuccess" class="text-neon text-heading" style="font-size: 14px"
+                  >₱{{ formatPrice(currentBchPrice) }}</span
+                >
+                <span v-else class="text-muted" style="font-size: 12px">Unavailable</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px">
+                <span class="text-muted">Gap to Target</span>
+                <span
+                  v-if="manageVault && currentBchPrice"
+                  :style="{ color: manageGap >= 0 ? 'var(--color-neon)' : '#ffb300' }"
+                  >{{ manageGap >= 0 ? '+' : '' }}{{ manageGap }}%</span
+                >
+                <span v-else class="text-muted">—</span>
+              </div>
+            </div>
           </div>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
+        </div>
 
-    <!-- QR Code Modal -->
-    <q-dialog v-model="showQrModal" persistent>
-      <div style="position: relative; background: white; padding: 24px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; max-width: 90vw;">
-        <q-btn flat dense round icon="close" v-close-popup style="position: absolute; top: -16px; right: -16px; background: var(--color-surface); color: var(--color-text);" />
-        <img :src="manageLargeQrUrl" alt="Full QR Code" style="width: 300px; height: 300px; max-width: 100%;" />
-        <div class="text-mono" style="margin-top: 16px; font-size: 12px; color: #111; word-break: break-all; text-align: center;">{{ manageVault?.contractAddress || 'N/A' }}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
+          <div class="card card--elevated">
+            <span class="label-tiny">Contract Details</span>
+            <div style="margin-top: 12px">
+              <div
+                class="text-muted"
+                style="font-size: 10px; margin-bottom: 4px; text-transform: uppercase"
+              >
+                Smart Contract Address
+              </div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  background: var(--color-surface-input);
+                  padding: 10px;
+                  border-radius: 6px;
+                  border: 1px solid var(--color-border);
+                  word-break: break-all;
+                "
+              >
+                <code class="text-mono" style="font-size: 11px">{{
+                  manageVault?.contractAddress || 'N/A'
+                }}</code>
+                <i
+                  class="material-icons"
+                  style="
+                    font-size: 14px;
+                    color: var(--color-text-dim);
+                    cursor: pointer;
+                    margin-left: 8px;
+                  "
+                  @click="copyAddress"
+                  >content_copy</i
+                >
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="card card--elevated"
+            @click="showQrModal = true"
+            style="
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              padding: 16px;
+              cursor: pointer;
+            "
+          >
+            <div
+              style="width: 80px; height: 80px; background: white; padding: 4px; border-radius: 4px"
+            >
+              <img :src="manageQrCodeUrl" alt="QR Code" style="width: 100%; height: 100%" />
+            </div>
+            <span
+              class="text-muted"
+              style="
+                font-size: 10px;
+                margin-top: 8px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                font-weight: bold;
+              "
+              >Deposit via QR</span
+            >
+          </div>
+        </div>
+
+        <div style="margin-top: 24px; display: flex; gap: 12px">
+          <q-btn
+            class="btn btn--primary"
+            style="flex: 1; font-size: 12px; padding: 12px"
+            :label="canVaultWithdraw(manageVault) ? 'Withdraw Funds (Unlocked)' : 'Vault Locked'"
+            :disable="!canVaultWithdraw(manageVault) || withdrawing"
+            :loading="withdrawing"
+            @click="onWithdraw"
+          />
+        </div>
+      </q-card-section>
+    </q-card>
+  </q-dialog>
+
+  <!-- Manage vault: deposit QR modal -->
+  <q-dialog v-model="showQrModal" persistent>
+    <div
+      style="
+        position: relative;
+        background: white;
+        padding: 24px;
+        border-radius: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-width: 90vw;
+      "
+    >
+      <q-btn
+        flat
+        dense
+        round
+        icon="close"
+        v-close-popup
+        style="
+          position: absolute;
+          top: -16px;
+          right: -16px;
+          background: var(--color-surface);
+          color: var(--color-text);
+        "
+      />
+      <img
+        :src="manageLargeQrUrl"
+        alt="Full QR Code"
+        style="width: 300px; height: 300px; max-width: 100%"
+      />
+      <div
+        class="text-mono"
+        style="
+          margin-top: 16px;
+          font-size: 12px;
+          color: #111;
+          word-break: break-all;
+          text-align: center;
+        "
+      >
+        {{ manageVault?.contractAddress || 'N/A' }}
       </div>
-    </q-dialog>
+    </div>
+  </q-dialog>
 
-    <!-- Activity Modal -->
-    <q-dialog v-model="showActivityModal" persistent>
-      <q-card class="modal-content" style="max-width: 800px; width: 100%;">
-        <q-card-section class="modal-header">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <i class="material-icons text-neon" style="font-size: 24px;">history</i>
-            <h3 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-heading);">Activity History</h3>
-          </div>
-          <q-btn flat dense round icon="close" v-close-popup />
-        </q-card-section>
-        <q-card-section class="modal-body">
-          <div class="modal-filter-row">
-            <select v-model="activityFilterTime" @change="loadActivityHistory">
-              <option value="all">All Time</option>
-              <option value="today">Today</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="thisWeek">This Week</option>
-              <option value="thisMonth">This Month</option>
-              <option value="thisYear">This Year</option>
-            </select>
-            <select v-model="activityFilterType" @change="loadActivityHistory">
-              <option value="all">All Activities</option>
-              <option value="deposits">Deposits Only</option>
-              <option value="withdrawals">Withdrawals Only</option>
-            </select>
-          </div>
+  <!-- Activity Modal -->
+  <q-dialog v-model="showActivityModal" persistent>
+    <q-card class="modal-content" style="max-width: 800px; width: 100%">
+      <q-card-section class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <i class="material-icons text-neon" style="font-size: 24px">history</i>
+          <h3
+            style="
+              margin: 0;
+              font-size: 18px;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              font-family: var(--font-heading);
+            "
+          >
+            Activity History
+          </h3>
+        </div>
+        <q-btn flat dense round icon="close" v-close-popup />
+      </q-card-section>
+      <q-card-section class="modal-body">
+        <div class="modal-filter-row">
+          <select v-model="activityFilterTime" @change="loadActivityHistory">
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="thisWeek">This Week</option>
+            <option value="thisMonth">This Month</option>
+            <option value="thisYear">This Year</option>
+          </select>
+          <select v-model="activityFilterType" @change="loadActivityHistory">
+            <option value="all">All Activities</option>
+            <option value="deposits">Deposits Only</option>
+            <option value="withdrawals">Withdrawals Only</option>
+          </select>
+        </div>
 
-          <div class="activity-scroll">
-            <div v-if="loadingLogs" style="text-align: center; padding: 40px; color: var(--color-text-dim);">
-              Loading activity...
-            </div>
-            <div v-else class="activity-list">
-              <div v-for="(log, index) in filteredActivities" :key="log._id || index" class="activity-item">
-                <div style="display: flex; align-items: center; gap: 16px;">
-                  <i class="material-icons" :style="{ color: getActivityColor(log.activityType) }">{{ getActivityIcon(log.activityType) }}</i>
-                  <div class="activity-item__info">
-                    <span class="activity-item__title">{{ formatActivityType(log.activityType) }}</span>
-                    <span class="activity-item__date">
-                      Vault: {{ log.vaultName || 'Unknown' }}
-                      <span v-if="log.details?.amountSatoshis"> • {{ formatBCH(log.details.amountSatoshis) }} BCH</span>
-                    </span>
-                  </div>
+        <div class="activity-scroll">
+          <div
+            v-if="loadingLogs"
+            style="text-align: center; padding: 40px; color: var(--color-text-dim)"
+          >
+            Loading activity...
+          </div>
+          <div v-else class="activity-list">
+            <div
+              v-for="(log, index) in filteredActivities"
+              :key="log._id || index"
+              class="activity-item"
+            >
+              <div style="display: flex; align-items: center; gap: 16px">
+                <i class="material-icons" :style="{ color: getActivityColor(log.activityType) }">{{
+                  getActivityIcon(log.activityType)
+                }}</i>
+                <div class="activity-item__info">
+                  <span class="activity-item__title">{{
+                    formatActivityType(log.activityType)
+                  }}</span>
+                  <span class="activity-item__date">
+                    Vault: {{ log.vaultName || 'Unknown' }}
+                    <span v-if="log.details?.amountSatoshis">
+                      • {{ formatBCH(log.details.amountSatoshis) }} BCH</span
+                    >
+                  </span>
                 </div>
-                <span class="activity-item__date">{{ formatDate(log.timestamp) }}</span>
               </div>
-              <div v-if="activityLogs.length === 0 && !loadingLogs" style="text-align: center; padding: 40px; color: var(--color-text-dim);">
-                No activity yet.
-              </div>
+              <span class="activity-item__date">{{ formatDate(log.timestamp) }}</span>
+              <button
+                v-if="log.details?.txHash"
+                class="btn btn--tx"
+                @click="openTxExplorer(log.details.txHash)"
+              >
+                <i class="material-icons" style="font-size: 14px">open_in_new</i>
+                View TX
+              </button>
             </div>
-            <div v-if="hasMoreLogs && !loadingLogs" style="text-align: center; padding: 16px;">
-              <button class="btn btn--outline" style="padding: 8px 32px;" :disabled="loadingMore" @click="loadMoreLogs">{{ loadingMore ? 'Loading...' : 'Load More' }}</button>
+            <div
+              v-if="activityLogs.length === 0 && !loadingLogs"
+              style="text-align: center; padding: 40px; color: var(--color-text-dim)"
+            >
+              No activity yet.
             </div>
           </div>
-        </q-card-section>
-      </q-card>
-    </q-dialog>
+          <div v-if="hasMoreLogs && !loadingLogs" style="text-align: center; padding: 16px">
+            <button
+              class="btn btn--outline"
+              style="padding: 8px 32px"
+              :disabled="loadingMore"
+              @click="loadMoreLogs"
+            >
+              {{ loadingMore ? 'Loading...' : 'Load More' }}
+            </button>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script>
@@ -434,11 +863,19 @@ export default defineComponent({
       oracleData: {
         message_hex: '',
         signature_hex: '',
-        oracle_pubkey_hex: '',
+        oracle_pubkey_hex: ORACLE_PUBKEY,
       },
 
-      // Wallet balance
+      // Wallet balance (internal use only)
       walletSats: 0,
+
+      // Hodler rank / leaderboard
+      rankingTopLimit: 10,
+      userRanks: {
+        lockedFund: null,
+        vaultCreated: null,
+      },
+      loadingHodlerRank: false,
 
       // Vault list
       vaults: [],
@@ -449,7 +886,6 @@ export default defineComponent({
       deploying: false,
       vaultName: '',
       targetPrice: null,
-      lockAmount: null,
       selectedPreset: null,
       autoWithdrawal: false,
 
@@ -485,7 +921,13 @@ export default defineComponent({
     },
 
     walletAddress() {
-      return this.$store.state.wallet?.address ?? null
+      const addr = this.$store.state.wallet?.address ?? null
+      return addr
+    },
+
+    walletAddresses() {
+      const addrs = this.$store.state.wallet?.addresses ?? []
+      return addrs.length > 0 ? addrs : this.walletAddress ? [this.walletAddress] : []
     },
 
     showVaultsEmptyState() {
@@ -494,19 +936,53 @@ export default defineComponent({
       return this.vaults.length === 0
     },
 
+    hasTargetPrice() {
+      const n = Number(this.targetPrice)
+      return Number.isFinite(n) && n > 0
+    },
+
     canDeploy() {
-      return (
-        this.walletConnected &&
-        this.targetPrice &&
-        this.targetPrice > 0 &&
-        this.oracleData.oracle_pubkey_hex
-      )
+      return this.walletConnected && this.hasTargetPrice
+    },
+
+    hodlerRankRows() {
+      if (!this.walletConnected || !this.userRanks) return []
+      const rows = []
+      const locked = this.userRanks.lockedFund
+      if (locked?.rank) {
+        rows.push({
+          key: 'locked',
+          rank: locked.rank,
+          label: 'BCH amount locked',
+          showMedal: locked.rank <= this.rankingTopLimit,
+        })
+      }
+      const vault = this.userRanks.vaultCreated
+      if (vault?.rank) {
+        rows.push({
+          key: 'vault',
+          rank: vault.rank,
+          label: 'Vaults Created',
+          showMedal: vault.rank <= this.rankingTopLimit,
+        })
+      }
+      return rows
     },
 
     phpBalance() {
-      if (!this.currentBchPrice || !this.walletSats) return '₱0.00'
+      if (!this.currentBchPrice || !this.walletSats) {
+        console.log(
+          `[BAL_TRACE] phpBalance | no price or no sats — returning ₱0.00 | currentBchPrice=${this.currentBchPrice} | walletSats=${this.walletSats}`,
+        )
+        return '₱0.00'
+      }
       const php = (this.walletSats / 100000000) * this.currentBchPrice
-      return '₱' + php.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      const formatted =
+        '₱' + php.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      console.log(
+        `[BAL_TRACE] phpBalance | walletSats=${this.walletSats} | bchPrice=${this.currentBchPrice} | php=${php} | formatted="${formatted}"`,
+      )
+      return formatted
     },
 
     totalLockedSats() {
@@ -514,7 +990,7 @@ export default defineComponent({
     },
 
     readyCount() {
-      return this.vaults.filter(v => this.canVaultWithdraw(v)).length
+      return this.vaults.filter((v) => this.canVaultWithdraw(v)).length
     },
 
     avgProgress() {
@@ -623,25 +1099,38 @@ export default defineComponent({
     },
 
     walletAddress(newAddr, oldAddr) {
+      console.log(`[BAL_TRACE] walletAddress watcher | old="${oldAddr}" → new="${newAddr}"`)
       if (newAddr && newAddr !== oldAddr) {
         this.loadVaults()
         this.fetchWalletBalance()
+        this.fetchHodlerRank()
+        this.activityLogs = []
+        disconnectSSE()
+        connectSSE()
       }
       if (!newAddr) {
+        console.log(
+          '[BAL_TRACE] walletAddress watcher | address cleared — resetting vaults and balance',
+        )
         this.vaults = []
         this.walletSats = 0
+        this.userRanks = { lockedFund: null, vaultCreated: null }
+        this.activityLogs = []
+        disconnectSSE()
       }
     },
   },
 
   mounted() {
+    console.log(
+      `[BAL_TRACE] DashboardPage mounted | walletAddress="${this.walletAddress}" | walletSats=${this.walletSats}`,
+    )
     this.refreshPrice()
     this.fetchWalletBalance()
+    this.fetchHodlerRank()
     this.loadVaults()
     this.startBalancePolling()
-
     connectSSE()
-    console.log('[SSE] ✅ SSE connected — listening for vault-withdrawn, deposit-confirmed, new-activity')
     window.addEventListener('vault-withdrawn', this.handleVaultWithdrawn)
     window.addEventListener('deposit-confirmed', this.handleDepositConfirmed)
     window.addEventListener('new-activity', this.handleNewActivity)
@@ -686,61 +1175,134 @@ export default defineComponent({
         this.oracleData = {
           message_hex: result.message_hex,
           signature_hex: result.signature_hex,
-          oracle_pubkey_hex: result.oracle_pubkey_hex,
+          oracle_pubkey_hex: result.oracle_pubkey_hex || ORACLE_PUBKEY,
         }
         this.oracleSuccess = true
       } catch (err) {
         console.error('Oracle fetch error:', err)
+        this.oracleData.oracle_pubkey_hex = ORACLE_PUBKEY
       } finally {
         this.priceLoading = false
       }
     },
 
-    // ─── Wallet Balance ──────────────────────────────────────
-    async fetchWalletBalance() {
-      if (!this.walletAddress) {
-        this.walletSats = 0
-        return
-      }
+    // ─── Hodler Rank ─────────────────────────────────────────
+    async fetchHodlerRank() {
+      if (this.loadingHodlerRank) return
+      this.loadingHodlerRank = true
       try {
-        const balance = await getAddressBalance(this.walletAddress)
-        this.walletSats = Number(balance)
-      } catch {
-        console.warn('Failed to fetch wallet balance')
-        this.walletSats = 0
+        const wallet = this.walletConnected ? this.walletAddress : null
+        const resp = await vaultApi.getGlobalStats(this.rankingTopLimit, wallet)
+        if (resp?.userRanks) {
+          this.userRanks = {
+            lockedFund: resp.userRanks.lockedFund || null,
+            vaultCreated: resp.userRanks.vaultCreated || null,
+          }
+        } else if (!wallet) {
+          this.userRanks = { lockedFund: null, vaultCreated: null }
+        }
+      } catch (e) {
+        console.warn('[HodlerRank] Failed to fetch:', e?.message || e)
+      } finally {
+        this.loadingHodlerRank = false
       }
     },
 
+    // ─── Wallet Balance ──────────────────────────────────────
+    async fetchWalletBalance() {
+      const addrs = this.walletAddresses
+      if (addrs.length === 0) {
+        console.log('[BAL_TRACE] fetchWalletBalance: no addresses, setting 0')
+        this.walletSats = 0
+        return
+      }
+      console.log(
+        `[BAL_TRACE] fetchWalletBalance: querying ${addrs.length} address(es) @ ${new Date().toISOString()}`,
+        JSON.stringify(addrs),
+      )
+      let totalBalance = null
+      let source = 'none'
+      // Try backend aggregate endpoint
+      try {
+        const t0 = performance.now()
+        const total = await vaultApi.getAggregateWalletBalance(addrs)
+        const elapsed = (performance.now() - t0).toFixed(1)
+        if (total >= 0) {
+          totalBalance = total
+          source = `backend-aggregate (${addrs.length} addrs)`
+          console.log(
+            `[BAL_TRACE] fetchWalletBalance: backend-aggregate returned ${total} sats in ${elapsed}ms`,
+          )
+        }
+      } catch (e) {
+        console.log(
+          `[BAL_TRACE] fetchWalletBalance: backend-aggregate failed (${e?.message}), falling back to individual queries`,
+        )
+      }
+      // Fallback: query each address directly via electrum
+      if (totalBalance == null) {
+        totalBalance = 0
+        source = `electrum (${addrs.length} addrs)`
+        for (let i = 0; i < addrs.length; i++) {
+          try {
+            const t0 = performance.now()
+            const bal = Number(await getAddressBalance(addrs[i]))
+            const elapsed = (performance.now() - t0).toFixed(1)
+            console.log(
+              `[BAL_TRACE] fetchWalletBalance: electrum address[${i}]="${addrs[i]}" → ${bal} sats in ${elapsed}ms`,
+            )
+            totalBalance += bal
+          } catch (e) {
+            console.warn(
+              `[BAL_TRACE] fetchWalletBalance: electrum address[${i}]="${addrs[i]}" FAILED: ${e?.message}`,
+            )
+          }
+        }
+      }
+      console.log(
+        `[BAL_TRACE] fetchWalletBalance: FINAL total=${totalBalance} sats (source=${source}) — updating walletSats`,
+      )
+      this.walletSats = totalBalance
+    },
+
     // ─── Vault List ──────────────────────────────────────────
-    async loadVaults() {
+    async loadVaults(options = {}) {
+      const silent = options.silent === true
       if (!this.walletAddress) {
         this.vaults = []
         return
       }
-      this.loadingVaults = true
+      if (!silent) {
+        this.loadingVaults = true
+      }
       this.backendError = null
       try {
         const storedVaults = await vaultStorage.getVaultsByWallet(this.walletAddress)
-        this.vaults = await Promise.all(
+        const mapped = await Promise.all(
           storedVaults.map(async (vault) => {
             if (!vault.priceTarget && vault.priceTargetCents) {
               vault.priceTarget = vault.priceTargetCents / 100
             }
             try {
               const balance = await getAddressBalance(vault.contractAddress)
-              vaultStorage.updateVaultBalance(vault.contractAddress, Number(balance))
+              void vaultStorage.updateVaultBalance(vault.contractAddress, Number(balance))
               return { ...vault, balance: Number(balance) }
             } catch {
               return vault
             }
           }),
         )
+        // Active Vaults: only show live vaults (hide withdrawn / backend cleanup lag)
+        this.vaults = mapped.filter((v) => !v.status || v.status === 'active')
       } catch (err) {
         console.error('Failed to load vaults:', err)
         this.backendError = err.message || 'Backend unreachable'
         this.vaults = []
       } finally {
-        this.loadingVaults = false
+        if (!silent) {
+          this.loadingVaults = false
+        }
+        this.fetchHodlerRank()
       }
     },
 
@@ -753,7 +1315,9 @@ export default defineComponent({
             vault.balance = balance
             vaultStorage.updateVaultBalance(vault.contractAddress, balance)
           }
-        } catch { /* silent */ }
+        } catch {
+          /* silent */
+        }
       })
     },
 
@@ -778,9 +1342,11 @@ export default defineComponent({
       this.manageModalInterval = setInterval(() => {
         this.refreshPrice()
         if (this.manageVault?.contractAddress) {
-          getAddressBalance(this.manageVault.contractAddress).then((balance) => {
-            this.manageVault.balance = Number(balance)
-          }).catch(() => {})
+          getAddressBalance(this.manageVault.contractAddress)
+            .then((balance) => {
+              this.manageVault.balance = Number(balance)
+            })
+            .catch(() => {})
         }
       }, 10000)
     },
@@ -820,7 +1386,9 @@ export default defineComponent({
       try {
         const { activityLogApi } = await import('src/services/activity-log-api.js')
         await activityLogApi.stopWatchingDeposit(addr)
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
       this.isWatchingDeposit = false
       this.depositWatchAddress = null
       console.log(`[DepositWatch] 🛑 Watch stopped for ${addr}`)
@@ -855,12 +1423,8 @@ export default defineComponent({
         }
 
         const ownerPkhHex = await recoverPublicKeyHash()
-        const oraclePkHex = this.oracleData.oracle_pubkey_hex
-        const priceTargetCents = Math.floor(this.targetPrice * 100)
-
-        if (!oraclePkHex) {
-          throw new Error('Oracle public key not loaded. Refresh the price first.')
-        }
+        const oraclePkHex = this.oracleData.oracle_pubkey_hex || ORACLE_PUBKEY
+        const priceTargetCents = Math.floor(Number(this.targetPrice) * 100)
 
         const existingVault = await vaultStorage.checkForDuplicateVault(
           this.walletAddress,
@@ -877,7 +1441,7 @@ export default defineComponent({
 
         const contractAddress = await calculateContractAddress(
           ownerPkhHex,
-          ORACLE_PUBKEY,
+          oraclePkHex,
           priceTargetCents,
           this.walletAddress,
         )
@@ -886,7 +1450,7 @@ export default defineComponent({
         const vaultId = vaultStorage.generateVaultId()
         const vaultName = this.vaultName || `Vault #${contractAddress.slice(-8)}`
 
-        vaultStorage.saveVault({
+        await vaultStorage.saveVault({
           id: vaultId,
           _id: vaultId,
           walletAddress: this.walletAddress,
@@ -894,7 +1458,7 @@ export default defineComponent({
           priceTarget: this.targetPrice,
           priceTargetCents,
           ownerPkhHex,
-          oraclePkHex: ORACLE_PUBKEY,
+          oraclePkHex,
           originalFundingAddress: this.walletAddress,
           balance,
           createdAt: Date.now(),
@@ -917,7 +1481,9 @@ export default defineComponent({
             contractAddress,
             expectedAmount: null,
           })
-        } catch { /* silent */ }
+        } catch {
+          /* silent */
+        }
 
         // Reload vault list
         await this.loadVaults()
@@ -925,9 +1491,16 @@ export default defineComponent({
         // Reset form
         this.vaultName = ''
         this.targetPrice = null
-        this.lockAmount = null
         this.selectedPreset = null
         this.autoWithdrawal = false
+
+        if (balance > 0) {
+          this.$q.notify({
+            type: 'info',
+            message: `Vault created with ${this.formatBalance(balance)} ${this.unit} on-chain balance.`,
+            timeout: 6000,
+          })
+        }
       } catch (err) {
         console.error('Vault creation failed:', err)
         this.$q.notify({
@@ -956,7 +1529,9 @@ export default defineComponent({
       }
 
       try {
-        const vaultData = await vaultStorage.getVaultByContractAddressFromBackend(vault.contractAddress)
+        const vaultData = await vaultStorage.getVaultByContractAddressFromBackend(
+          vault.contractAddress,
+        )
         if (!vaultData) {
           this.$q.notify({ type: 'negative', message: 'Vault not found' })
           return
@@ -1061,18 +1636,22 @@ export default defineComponent({
               amountSatoshis: result.amountSatoshis || this.manageVault.balance || 0,
               txHash: result.txHash,
             })
-          } catch { /* silent */ }
+          } catch {
+            /* silent */
+          }
 
           try {
             await vaultStorage.deleteVault(
               this.manageVault.contractAddress,
               this.manageVault._id || this.manageVault.id,
             )
-          } catch { /* silent */ }
+          } catch {
+            /* silent */
+          }
 
           this.showVaultManageModal = false
           this.manageVault = null
-          await this.loadVaults()
+          await this.loadVaults({ silent: true })
         } else {
           this.$q.notify({
             type: 'negative',
@@ -1162,22 +1741,36 @@ export default defineComponent({
         .replace(/\b\w/g, (l) => l.toUpperCase())
     },
 
+    openTxExplorer(txHash) {
+      window.open(`https://chipnet.bch.ninja/tx/${txHash}`, '_blank')
+    },
+
     // ─── SSE Handlers ────────────────────────────────────────
     handleVaultWithdrawn(event) {
-      const { contractAddress, amountSatoshis } = event.detail
-      console.log(`[SSE] vault-withdrawn | contract: ${contractAddress} | amount: ${amountSatoshis}sats`)
+      const { contractAddress, amountSatoshis } = event.detail || {}
+      console.log(
+        `[SSE] vault-withdrawn | contract: ${contractAddress} | amount: ${amountSatoshis}sats`,
+      )
+      if (contractAddress) {
+        this.vaults = this.vaults.filter((v) => v.contractAddress !== contractAddress)
+      }
       // If the withdrawn vault is currently in the manage modal, close it
       if (this.manageVault?.contractAddress === contractAddress) {
         this.showQrModal = false
         this.showVaultManageModal = false
         this.manageVault = null
       }
+      const bchStr =
+        amountSatoshis != null && Number.isFinite(Number(amountSatoshis))
+          ? (Number(amountSatoshis) / 100000000).toFixed(8)
+          : '0.00000000'
       this.$q.notify({
         type: 'positive',
-        message: `Auto-withdrawal complete! ${(amountSatoshis / 100000000).toFixed(8)} BCH returned to your wallet`,
+        message: `Auto-withdrawal complete! ${bchStr} BCH returned to your wallet`,
         timeout: 5000,
       })
-      setTimeout(() => this.loadVaults(), 1000)
+      void this.loadVaults({ silent: true })
+      void this.fetchWalletBalance()
     },
 
     handleDepositConfirmed(event) {
@@ -1185,10 +1778,10 @@ export default defineComponent({
       const elapsed = this.qrOpenedAt ? Date.now() - this.qrOpenedAt : -1
       console.log(
         `[DepositWatch] ✅ deposit-confirmed SSE received` +
-        ` | contract: ${contractAddress}` +
-        ` | amount: ${amountSatoshis}sats` +
-        ` | newBalance: ${newBalance}` +
-        (elapsed >= 0 ? ` | ⏱️ T+${elapsed}ms since QR opened` : '')
+          ` | contract: ${contractAddress}` +
+          ` | amount: ${amountSatoshis}sats` +
+          ` | newBalance: ${newBalance}` +
+          (elapsed >= 0 ? ` | ⏱️ T+${elapsed}ms since QR opened` : ''),
       )
       // Update vault in list
       const vault = this.vaults.find((v) => v.contractAddress === contractAddress)
@@ -1199,7 +1792,7 @@ export default defineComponent({
       if (this.manageVault?.contractAddress === contractAddress && newBalance !== undefined) {
         this.manageVault.balance = newBalance
       }
-      // Auto-close QR modal after deposit + stop watch
+      // Auto-close manage deposit QR after deposit
       if (this.showQrModal) {
         this.showQrModal = false
       }
@@ -1210,6 +1803,7 @@ export default defineComponent({
         icon: 'check_circle',
         timeout: 5000,
       })
+      void this.fetchHodlerRank()
     },
 
     handleNewActivity(event) {
@@ -1223,9 +1817,14 @@ export default defineComponent({
     formatBalance(sats) {
       if (!sats) sats = 0
       const n = Number(sats)
-      if (this.unit === 'sats') return n.toLocaleString()
-      if (this.unit === 'mBCH') return (n / 100000).toFixed(5)
-      return (n / 100000000).toFixed(8)
+      let result
+      if (this.unit === 'sats') result = n.toLocaleString()
+      else if (this.unit === 'mBCH') result = (n / 100000).toFixed(5)
+      else result = (n / 100000000).toFixed(8)
+      console.log(
+        `[BAL_TRACE] formatBalance | input=${sats} sats | unit=${this.unit} | formatted="${result}"`,
+      )
+      return result
     },
 
     formatPrice(value) {

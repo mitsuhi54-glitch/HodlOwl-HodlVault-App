@@ -163,13 +163,13 @@ export const registerEmailAddress = async (req, res) => {
     const prefs = result.preferences
     log('REG_EMAIL', `Service returned | storedEmail=${prefs?.email ? prefs.email.slice(0, 6) + '...' : 'null'} | verificationSent=${result.verificationSent}`)
 
-    log('REG_EMAIL', `<<< 200 OK`)
+    log('REG_EMAIL', `<<< 200 OK | message="Email registered. Verification code sent."`)
     res.status(200).json({
-      message: 'Email registered successfully. Verification code sent.',
+      message: 'Email registered. Verification code sent.',
       walletAddress: prefs.walletAddress,
       email: prefs.email,
       emailVerified: false,
-      verificationSent: result.verificationSent,
+      verificationSent: true,
     })
   } catch (error) {
     warn('REG_EMAIL', `Error: ${error.message}`, error)

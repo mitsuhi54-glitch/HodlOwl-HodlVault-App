@@ -267,7 +267,7 @@
 </template>
 
 <script>
-import { recoverPublicKeyHash } from 'src/boot/walletconnect'
+import { recoverPublicKeyHash, restoreSessionIfAny } from 'src/boot/walletconnect'
 import { defineComponent } from 'vue'
 import {
   calculateContractAddress,
@@ -797,7 +797,33 @@ export default defineComponent({
 
   watch: {
     walletAddress(newAddress, oldAddress) {
-      if (!newAddress || newAddress !== oldAddress) {
+      if (!newAddress) {
+        console.warn('[VaultPage] Wallet address became null — attempting session recovery')
+        // Attempt silent recovery before showing "connect your wallet"
+        this.$nextTick(async () => {
+          try {
+            await restoreSessionIfAny(this.$store)
+            if (this.$store.state.wallet?.address) {
+              console.log('[VaultPage] Wallet session recovered successfully')
+              return
+            }
+          } catch (e) {
+            console.warn('[VaultPage] Wallet recovery failed:', e)
+          }
+          // Recovery failed — reset vault state
+          this.vault = null
+          this.depositing = false
+          this.clearPersistedVaultState()
+          if (this.balanceInterval) {
+            clearInterval(this.balanceInterval)
+            this.balanceInterval = null
+          }
+          if (this.depositPollInterval) {
+            clearInterval(this.depositPollInterval)
+            this.depositPollInterval = null
+          }
+        })
+      } else if (newAddress !== oldAddress) {
         this.vault = null
         this.depositing = false
         this.clearPersistedVaultState()
@@ -844,6 +870,12 @@ export default defineComponent({
     this.balanceInterval = setInterval(() => {
       this.refreshVaultBalance()
     }, 30000)
+
+    // Attempt wallet recovery if wallet state was lost (prevents false "connect your wallet" banners)
+    if (!this.hasWallet) {
+      console.log('[VaultPage] mounted with no wallet — attempting silent session recovery')
+      restoreSessionIfAny(this.$store)
+    }
   },
 
   beforeUnmount() {
