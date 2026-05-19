@@ -10,6 +10,7 @@ import {
   checkDuplicateVault,
   updateVaultBalance,
   getVaultStats,
+  getGlobalStats,
   getVaultByContractAddress,
   toggleAutoWithdrawal,
 } from '../controllers/vault.controller.js'
@@ -18,6 +19,7 @@ const router = Router()
 
 // Public endpoints (no wallet authentication required)
 router.get('/wallet/:walletAddress', getVaultsByWallet)
+router.get('/stats', getGlobalStats)
 router.get('/stats/:wallet', optionalWalletAddress, getVaultStats)
 
 // Apply wallet address extraction middleware to protected routes

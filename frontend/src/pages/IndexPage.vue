@@ -19,15 +19,18 @@
         <div class="stats-row" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 48px;">
           <div class="card card--elevated" style="min-height: 90px; padding: 16px 20px;">
             <span class="label-tiny">Total Locked</span>
-            <div class="text-neon" style="font-size: 20px; font-weight: 700;"><span class="counter" ref="counter1" data-target="1240.42">0.00</span> <span style="font-size: 12px;">BCH</span></div>
+            <div class="text-neon" style="font-size: 20px; font-weight: 700;">
+              <span class="counter" ref="counter1" :data-target="String(stats.totalLockedBCH)">0.00</span>
+              <span style="font-size: 12px;">BCH</span>
+            </div>
           </div>
           <div class="card card--elevated" style="min-height: 90px; padding: 16px 20px;">
             <span class="label-tiny">Active Vaults</span>
-            <div class="counter" ref="counter2" data-target="856" style="font-size: 20px; font-weight: 700;">0</div>
+            <div class="counter" ref="counter2" :data-target="String(stats.activeVaults)" style="font-size: 20px; font-weight: 700;">0</div>
           </div>
           <div class="card card--elevated" style="min-height: 90px; padding: 16px 20px;">
             <span class="label-tiny">Total Target Price Reached</span>
-            <div class="counter" ref="counter3" data-target="14204" style="font-size: 20px; font-weight: 700;">0</div>
+            <div class="counter" ref="counter3" :data-target="String(stats.totalTargetPriceReached)" style="font-size: 20px; font-weight: 700;">0</div>
           </div>
         </div>
       </div>
@@ -82,18 +85,24 @@
 
 <script>
 import { defineComponent } from 'vue'
+import { vaultApi } from 'src/services/api.service'
 
 export default defineComponent({
   name: 'IndexPage',
   data() {
     return {
       slideIndex: 0,
-      slideTimeout: null
+      slideTimeout: null,
+      stats: {
+        totalLockedBCH: 0,
+        activeVaults: 0,
+        totalTargetPriceReached: 0,
+      },
     }
   },
   mounted() {
-    this.startSlideshow();
-    this.initCounters();
+    this.startSlideshow()
+    this.fetchGlobalStats()
   },
   beforeUnmount() {
     if (this.slideTimeout) {
@@ -102,6 +111,19 @@ export default defineComponent({
     }
   },
   methods: {
+    async fetchGlobalStats() {
+      try {
+        const response = await vaultApi.getGlobalStats()
+        if (response?.stats) {
+          this.stats = response.stats
+        }
+      } catch (err) {
+        console.warn('Failed to fetch global stats:', err)
+      }
+      // Start counters after data is set (or fallback to 0)
+      this.$nextTick(() => this.initCounters())
+    },
+
     showSlides() {
       this.slideIndex++;
       if (this.slideIndex > 2) this.slideIndex = 0;
@@ -125,14 +147,19 @@ export default defineComponent({
         if(!counter) return;
         const targetVal = counter.getAttribute('data-target');
         const finalTarget = +targetVal;
-        const isFloat = targetVal.includes('.');
+        const isFloat = targetVal && targetVal.includes('.');
 
         const duration = 1500;
         const frameRate = 30;
         const characters = '0123456789';
 
         let startTime = null;
-        let originalText = isFloat ? finalTarget.toFixed(2) : finalTarget.toString();
+        let originalText = isFloat ? finalTarget.toFixed(2) : Math.round(finalTarget).toString();
+
+        if (finalTarget === 0) {
+          counter.innerText = isFloat ? '0.00' : '0';
+          return;
+        }
 
         const addCommas = (str) => {
           let parts = str.split('.');

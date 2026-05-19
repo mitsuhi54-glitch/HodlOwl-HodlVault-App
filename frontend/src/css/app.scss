@@ -222,8 +222,9 @@ header, .q-header {
   padding-top: 64px !important;
 }
 
-.q-page-container.page-container--dashboard {
-  padding-top: 64px !important;
+/* Dashboard: disable Quasar’s extra page offset (we set spacing on main instead) */
+.q-layout .q-page-container.page-container--dashboard {
+  padding-top: 0 !important;
 }
 
 .q-page-container > * {
@@ -941,9 +942,9 @@ input:checked + .toggle-slider:before {
   flex: none;
 }
 
-/* Dashboard: match UI model — single top spacing layer (no wrapper + grid stack) */
+/* Dashboard: header clearance + tight gap (single layer — avoids double spacing) */
 .container--page-dashboard {
-  padding-top: 20px;
+  padding-top: calc(64px + 4px);
   padding-bottom: 40px;
   flex: none;
 }

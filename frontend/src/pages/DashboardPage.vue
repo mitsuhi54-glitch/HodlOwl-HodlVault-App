@@ -172,9 +172,8 @@
 
           <div v-else class="active-vaults-view-connected">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
-              <h2 class="label-tiny" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+              <h2 class="label-tiny" style="margin: 0;">
                 Active Vaults
-                <span style="background: var(--color-border); padding: 1px 6px; border-radius: 10px; font-size: 9px; color: var(--color-text-dim);">{{ vaults.length }}</span>
               </h2>
             </div>
 
@@ -189,7 +188,7 @@
                 <button class="btn btn--outline" style="margin-top: 12px; padding: 6px 16px; font-size: 11px;" @click="loadVaults">Retry</button>
               </div>
 
-              <div v-for="(vault, index) in vaults" :key="vault.id || index" class="vault-card" @click="openVaultManage(vault)">
+              <div v-for="(vault, index) in vaults" :key="vault.id || index" class="vault-card" @click="onVaultCardClick($event, vault)">
                 <div class="vault-card__header">
                   <div class="vault-card__avatar" :class="canVaultWithdraw(vault) ? 'vault-card__avatar--ready' : 'vault-card__avatar--hodl'">
                     <i class="material-icons">{{ canVaultWithdraw(vault) ? 'lock_open' : 'lock' }}</i>
@@ -221,9 +220,9 @@
                     <i class="material-icons" style="font-size: 14px;">{{ canVaultWithdraw(vault) ? 'check_circle' : 'lock' }}</i>
                     {{ canVaultWithdraw(vault) ? 'Ready to Withdraw' : 'HODLing' }}
                   </div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <div class="vault-card__actions" style="display: flex; align-items: center; gap: 8px;" @click.stop>
                     <span class="badge--auto" :title="vault.autoWithdrawal ? 'Auto-withdrawal enabled' : 'Auto-withdrawal disabled'" :style="{ opacity: vault.autoWithdrawal ? 1 : 0.5 }">Auto</span>
-                    <label class="toggle-switch" style="transform: scale(0.8); transform-origin: right;">
+                    <label class="toggle-switch" style="transform: scale(0.8); transform-origin: right;" @click.stop>
                       <input type="checkbox" :checked="vault.autoWithdrawal" @click.stop @change="toggleAutoWithdraw(vault)">
                       <span class="toggle-slider"></span>
                     </label>
@@ -248,7 +247,7 @@
   </main>
 
   <!-- Vault Management Modal -->
-    <q-dialog v-model="showVaultManageModal" persistent maximized>
+    <q-dialog v-model="showVaultManageModal" persistent>
       <q-card class="modal-content" style="max-width: 700px; width: 100%;">
         <q-card-section class="modal-header">
           <div style="display: flex; align-items: center; gap: 12px;">
@@ -340,7 +339,7 @@
     </q-dialog>
 
     <!-- Activity Modal -->
-    <q-dialog v-model="showActivityModal" persistent maximized>
+    <q-dialog v-model="showActivityModal" persistent>
       <q-card class="modal-content" style="max-width: 800px; width: 100%;">
         <q-card-section class="modal-header">
           <div style="display: flex; align-items: center; gap: 12px;">
@@ -467,8 +466,16 @@ export default defineComponent({
       // Withdrawal
       withdrawing: false,
 
+      // Deposit watch
+      isWatchingDeposit: false,
+      depositWatchAddress: null,
+
       // Intervals
       balanceInterval: null,
+      manageModalInterval: null,
+
+      // Diagnostics
+      qrOpenedAt: null,
     }
   },
 
@@ -599,6 +606,22 @@ export default defineComponent({
       localStorage.setItem('balanceUnit', val)
     },
 
+    showVaultManageModal(open) {
+      if (open) {
+        this.startManageModalRefresh()
+      } else {
+        this.stopManageModalRefresh()
+      }
+    },
+
+    showQrModal(open) {
+      if (open && this.manageVault?.contractAddress) {
+        this.startDepositWatch()
+      } else {
+        this.stopDepositWatch()
+      }
+    },
+
     walletAddress(newAddr, oldAddr) {
       if (newAddr && newAddr !== oldAddr) {
         this.loadVaults()
@@ -618,6 +641,7 @@ export default defineComponent({
     this.startBalancePolling()
 
     connectSSE()
+    console.log('[SSE] ✅ SSE connected — listening for vault-withdrawn, deposit-confirmed, new-activity')
     window.addEventListener('vault-withdrawn', this.handleVaultWithdrawn)
     window.addEventListener('deposit-confirmed', this.handleDepositConfirmed)
     window.addEventListener('new-activity', this.handleNewActivity)
@@ -625,7 +649,10 @@ export default defineComponent({
 
   beforeUnmount() {
     this.stopBalancePolling()
+    this.stopManageModalRefresh()
+    this.stopDepositWatch()
     disconnectSSE()
+    console.log('[SSE] Disconnected — page unmounted')
     window.removeEventListener('vault-withdrawn', this.handleVaultWithdrawn)
     window.removeEventListener('deposit-confirmed', this.handleDepositConfirmed)
     window.removeEventListener('new-activity', this.handleNewActivity)
@@ -745,6 +772,60 @@ export default defineComponent({
       }
     },
 
+    startManageModalRefresh() {
+      this.stopManageModalRefresh()
+      // Refresh oracle price and balance every 10s while manage modal is open
+      this.manageModalInterval = setInterval(() => {
+        this.refreshPrice()
+        if (this.manageVault?.contractAddress) {
+          getAddressBalance(this.manageVault.contractAddress).then((balance) => {
+            this.manageVault.balance = Number(balance)
+          }).catch(() => {})
+        }
+      }, 10000)
+    },
+
+    stopManageModalRefresh() {
+      if (this.manageModalInterval) {
+        clearInterval(this.manageModalInterval)
+        this.manageModalInterval = null
+      }
+    },
+
+    async startDepositWatch() {
+      if (this.isWatchingDeposit || !this.manageVault?.contractAddress) return
+      const addr = this.manageVault.contractAddress
+      this.depositWatchAddress = addr
+      this.qrOpenedAt = Date.now()
+      console.log(`[DepositWatch] ⏱️ QR opened at T+0ms — watching ${addr}`)
+      try {
+        const { activityLogApi } = await import('src/services/activity-log-api.js')
+        await activityLogApi.watchDeposit({
+          vaultId: this.manageVault._id || this.manageVault.id,
+          vaultName: this.manageVault.name,
+          contractAddress: addr,
+          expectedAmount: null,
+        })
+        this.isWatchingDeposit = true
+        console.log(`[DepositWatch] ✅ Watch started for ${addr}`)
+      } catch (err) {
+        this.depositWatchAddress = null
+        console.warn('[DepositWatch] Failed to start watch:', err.message)
+      }
+    },
+
+    async stopDepositWatch() {
+      if (!this.isWatchingDeposit || !this.depositWatchAddress) return
+      const addr = this.depositWatchAddress
+      try {
+        const { activityLogApi } = await import('src/services/activity-log-api.js')
+        await activityLogApi.stopWatchingDeposit(addr)
+      } catch { /* silent */ }
+      this.isWatchingDeposit = false
+      this.depositWatchAddress = null
+      console.log(`[DepositWatch] 🛑 Watch stopped for ${addr}`)
+    },
+
     canVaultWithdraw(vault) {
       if (!vault || !this.currentBchPrice || !vault.priceTarget) return false
       return Number(this.currentBchPrice) >= Number(vault.priceTarget)
@@ -860,6 +941,13 @@ export default defineComponent({
     },
 
     // ─── Vault Management ────────────────────────────────────
+    onVaultCardClick(event, vault) {
+      if (event.target.closest('.vault-card__actions, .toggle-switch')) {
+        return
+      }
+      this.openVaultManage(vault)
+    },
+
     async openVaultManage(vault) {
       const wc = this.$walletConnect
       if (!wc || !wc.isConnected()) {
@@ -1077,7 +1165,13 @@ export default defineComponent({
     // ─── SSE Handlers ────────────────────────────────────────
     handleVaultWithdrawn(event) {
       const { contractAddress, amountSatoshis } = event.detail
-      this.vaults = this.vaults.filter((v) => v.contractAddress !== contractAddress)
+      console.log(`[SSE] vault-withdrawn | contract: ${contractAddress} | amount: ${amountSatoshis}sats`)
+      // If the withdrawn vault is currently in the manage modal, close it
+      if (this.manageVault?.contractAddress === contractAddress) {
+        this.showQrModal = false
+        this.showVaultManageModal = false
+        this.manageVault = null
+      }
       this.$q.notify({
         type: 'positive',
         message: `Auto-withdrawal complete! ${(amountSatoshis / 100000000).toFixed(8)} BCH returned to your wallet`,
@@ -1088,10 +1182,28 @@ export default defineComponent({
 
     handleDepositConfirmed(event) {
       const { contractAddress, amountSatoshis, newBalance } = event.detail
+      const elapsed = this.qrOpenedAt ? Date.now() - this.qrOpenedAt : -1
+      console.log(
+        `[DepositWatch] ✅ deposit-confirmed SSE received` +
+        ` | contract: ${contractAddress}` +
+        ` | amount: ${amountSatoshis}sats` +
+        ` | newBalance: ${newBalance}` +
+        (elapsed >= 0 ? ` | ⏱️ T+${elapsed}ms since QR opened` : '')
+      )
+      // Update vault in list
       const vault = this.vaults.find((v) => v.contractAddress === contractAddress)
       if (vault && newBalance !== undefined) {
         vault.balance = newBalance
       }
+      // Update manage modal live if it's the same vault
+      if (this.manageVault?.contractAddress === contractAddress && newBalance !== undefined) {
+        this.manageVault.balance = newBalance
+      }
+      // Auto-close QR modal after deposit + stop watch
+      if (this.showQrModal) {
+        this.showQrModal = false
+      }
+      this.isWatchingDeposit = false
       this.$q.notify({
         type: 'positive',
         message: `Deposit confirmed! +${amountSatoshis} satoshis`,

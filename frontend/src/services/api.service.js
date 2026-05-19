@@ -182,6 +182,15 @@ export const vaultApi = {
     })
     return response.data
   },
+
+  /**
+   * Get global vault statistics (across ALL users)
+   * @returns {Promise<Object>} Global stats { totalLockedBCH, activeVaults, totalTargetPriceReached }
+   */
+  async getGlobalStats() {
+    const response = await apiClient.get('/vaults/stats')
+    return response.data
+  },
 }
 
 /**

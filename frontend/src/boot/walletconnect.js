@@ -423,15 +423,22 @@ export function initializeWalletConnect(store) {
             currentSession = bchSession
             console.log('[WC TIMING] Step 4: Syncing existing session to store...')
             const syncStart = performance.now()
-            await syncSessionToStore(store, client, currentSession)
-            console.log(
-              `[WC TIMING] Step 4: Session synced (${(performance.now() - syncStart).toFixed(2)}ms)`,
-            )
-            const totalTime = performance.now() - connectStart
-            console.log(
-              `[WC TIMING] === TOTAL: ${totalTime.toFixed(2)}ms (using existing session) ===`,
-            )
-            return store.state.wallet?.address ?? null
+            const synced = await syncSessionToStore(store, client, currentSession)
+            if (synced) {
+              console.log(
+                `[WC TIMING] Step 4: Session synced (${(performance.now() - syncStart).toFixed(2)}ms)`,
+              )
+              const totalTime = performance.now() - connectStart
+              console.log(
+                `[WC TIMING] === TOTAL: ${totalTime.toFixed(2)}ms (using existing session) ===`,
+              )
+              return store.state.wallet?.address ?? null
+            } else {
+              // Sync failed — session is stale, disconnect and fall through to new connection
+              console.log('[WC TIMING] Step 4: Session sync failed — disconnecting stale session')
+              client.disconnect({ topic: bchSession.topic }).catch(() => {})
+              currentSession = null
+            }
           } else {
             console.log(
               `[WC TIMING] Step 3: Session invalid or expired (${(performance.now() - checkStart).toFixed(2)}ms)`,
@@ -596,6 +603,19 @@ export function initializeWalletConnect(store) {
   }
 }
 
+// Timeout wrapper for client.request calls to prevent hanging forever
+// when the wallet is no longer connected.
+function requestWithTimeout(client, params, ms = 5000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timed out after ${ms}ms`))
+    }, ms)
+    client.request(params)
+      .then((val) => { clearTimeout(timer); resolve(val) })
+      .catch((err) => { clearTimeout(timer); reject(err) })
+  })
+}
+
 async function syncSessionToStore(store, client, session) {
   const syncStart = performance.now()
   const chainId = session.namespaces?.bch?.chains?.[0] ?? BCH_CHIPNET_CHAIN
@@ -605,7 +625,7 @@ async function syncSessionToStore(store, client, session) {
   try {
     console.log('[WC TIMING] syncSessionToStore: Requesting bch_getAddresses...')
     const addrStart = performance.now()
-    const addresses = await client.request({
+    const addresses = await requestWithTimeout(client, {
       chainId,
       topic: session.topic,
       request: { method: 'bch_getAddresses', params: {} },
@@ -621,7 +641,7 @@ async function syncSessionToStore(store, client, session) {
       try {
         console.log('[WC TIMING] syncSessionToStore: Requesting bch_getPublicKey...')
         const pkStart = performance.now()
-        const pubKeyResult = await client.request({
+        const pubKeyResult = await requestWithTimeout(client, {
           chainId,
           topic: session.topic,
           request: { method: 'bch_getPublicKey', params: {} },
@@ -651,11 +671,14 @@ async function syncSessionToStore(store, client, session) {
       console.log(
         `[WC TIMING] syncSessionToStore: TOTAL ${(performance.now() - syncStart).toFixed(2)}ms`,
       )
+      return true
     } else {
       console.warn('DEBUG: No address retrieved from wallet')
+      return false
     }
   } catch (e) {
     console.warn('WalletConnect: could not get addresses', e)
+    return false
   }
 }
 
@@ -666,40 +689,34 @@ async function restoreSessionIfAny(store) {
     const sessions = client.session.getAll()
     const bchSession = sessions.find((s) => s.namespaces?.bch?.accounts?.length)
 
+    const disconnectStale = async () => {
+      if (bchSession) {
+        try { await client.disconnect({ topic: bchSession.topic }) } catch { /* ignore */ }
+      }
+      currentSession = null
+    }
+
     if (bchSession && bchSession.expiry * 1000 > Date.now()) {
-      // Check if session has required methods
       const methods = bchSession.namespaces?.bch?.methods ?? []
       const hasRequiredMethods = REQUIRED_METHODS.every((m) => methods.includes(m))
 
       if (hasRequiredMethods) {
         currentSession = bchSession
-        await syncSessionToStore(store, client, bchSession)
+        const synced = await syncSessionToStore(store, client, bchSession)
+        if (!synced) {
+          // Wallet didn't respond — stale session, clean it up
+          console.log('[WC] Session restore failed — wallet unreachable, disconnecting stale session')
+          await disconnectStale()
+        }
       } else {
-        // Clean up invalid session
-        await client.disconnect({ topic: bchSession.topic })
+        await disconnectStale()
       }
     } else if (bchSession) {
-      // Clean up expired session
-      await client.disconnect({ topic: bchSession.topic })
+      await disconnectStale()
     }
   } catch (e) {
     console.debug('WalletConnect session restore failed:', e)
   }
-}
-
-// On boot, clean any stale sessions stored by SignClient (IndexedDB)
-// so we don't get stuck trying to sync with a wallet that's no longer connected.
-async function clearStaleSessionsOnBoot(store) {
-  try {
-    const client = await getSignClient(store)
-    const sessions = client.session.getAll()
-    for (const s of sessions) {
-      try {
-        await client.disconnect({ topic: s.topic })
-      } catch { /* ignore */ }
-    }
-    currentSession = null
-  } catch { /* SignClient not yet available */ }
 }
 
 export default boot(({ app }) => {
@@ -711,8 +728,6 @@ export default boot(({ app }) => {
   const wc = initializeWalletConnect(store)
   app.config.globalProperties.$walletConnect = wc
   app.provide('walletConnect', wc)
-  // Wipe stale sessions first, then attempt restore (will start clean)
-  clearStaleSessionsOnBoot(store).then(() => {
-    restoreSessionIfAny(store)
-  })
+  // Attempt to restore any existing valid session (will auto-clean stale ones)
+  restoreSessionIfAny(store)
 })

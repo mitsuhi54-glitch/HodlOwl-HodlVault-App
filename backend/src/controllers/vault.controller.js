@@ -591,6 +591,52 @@ export const getVaultStats = async (req, res) => {
 }
 
 /**
+ * Get global vault statistics (across ALL users)
+ */
+export const getGlobalStats = async (req, res) => {
+  try {
+    const result = await Vault.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalBalance: { $sum: '$balance' },
+          activeVaults: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+          withdrawnVaults: { $sum: { $cond: [{ $eq: ['$status', 'withdrawn'] }, 1, 0] } },
+          totalVaults: { $sum: 1 },
+        },
+      },
+    ])
+
+    if (result.length === 0) {
+      return res.status(200).json({
+        message: 'Global vault statistics retrieved successfully',
+        stats: {
+          totalLockedBCH: 0,
+          activeVaults: 0,
+          totalTargetPriceReached: 0,
+        },
+      })
+    }
+
+    const data = result[0]
+    res.status(200).json({
+      message: 'Global vault statistics retrieved successfully',
+      stats: {
+        totalLockedBCH: ((data.totalBalance || 0) / 100000000),
+        activeVaults: data.activeVaults || 0,
+        totalTargetPriceReached: data.withdrawnVaults || 0,
+      },
+    })
+  } catch (error) {
+    console.error('Get global stats error:', error)
+    res.status(500).json({
+      message: 'Internal server error',
+      error: error.message,
+    })
+  }
+}
+
+/**
  * Toggle auto-withdrawal for a vault
  */
 export const toggleAutoWithdrawal = async (req, res) => {
