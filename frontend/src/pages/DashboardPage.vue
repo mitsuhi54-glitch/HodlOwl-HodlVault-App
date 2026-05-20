@@ -859,27 +859,27 @@
   </q-dialog>
 
   <!-- Leaderboard Modal -->
-  <q-dialog v-model="showLeaderboardModal">
-    <q-card class="modal-content" style="max-width: 720px; width: 100%">
+  <q-dialog v-model="showLeaderboardModal" :maximized="false">
+    <q-card class="modal-content" style="max-width: 960px; width: 100%;">
       <q-card-section class="modal-header">
-        <div style="display: flex; align-items: center; gap: 12px">
-          <i class="material-icons text-neon" style="font-size: 24px">leaderboard</i>
-          <h3 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-heading);">
+        <div style="display: flex; align-items: center; gap: 16px">
+          <i class="material-icons text-neon" style="font-size: 32px">leaderboard</i>
+          <h3 style="margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-heading);">
             BCH Leaderboard — Top {{ rankingTopLimit }}
           </h3>
         </div>
-        <q-btn flat dense round icon="close" v-close-popup />
+        <q-btn flat dense round icon="close" v-close-popup size="lg" />
       </q-card-section>
       <q-card-section class="modal-body">
-        <div v-if="loadingRankings" style="text-align: center; padding: 40px; color: var(--color-text-dim);">
+        <div v-if="loadingRankings" style="text-align: center; padding: 60px; color: var(--color-text-dim); font-size: 16px;">
           Loading leaderboard...
         </div>
         <div v-else>
-          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-            <span class="label-tiny" style="margin: 0;">Largest BCH Locked</span>
-            <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Active Vaults</span>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <span class="label-tiny" style="margin: 0; font-size: 14px;">Largest BCH Locked</span>
+            <span class="text-neon text-mono" style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Active Vaults</span>
           </div>
-          <div v-if="rankings.lockedBCH.length === 0" class="text-muted" style="font-size: 12px; padding: 16px 0;">
+          <div v-if="rankings.lockedBCH.length === 0" class="text-muted" style="font-size: 14px; padding: 24px 0;">
             No data yet.
           </div>
           <div v-else class="leaderboard-table">
@@ -909,7 +909,7 @@
                 </span>
                 <span class="leaderboard-table__name">{{ entry.profileName || truncateAddress(entry.walletAddress) }}</span>
               </span>
-              <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
+              <span class="leaderboard-table__value">{{ formatBalance(entry.totalBalance) }}</span>
               <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
             </div>
           </div>

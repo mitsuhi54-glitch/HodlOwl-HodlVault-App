@@ -60,7 +60,7 @@
       <q-footer>
         <div class="container footer-content">
           <div class="footer-left">
-            &copy; 2026 HODLOWL WEB APP
+            &copy; 2026 HODLVAULT WEB APP
           </div>
           <div class="footer-right">
             <span class="status-item">SYSTEM VERSION: v2.3.0</span>

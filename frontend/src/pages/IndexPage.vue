@@ -38,22 +38,28 @@
       <!-- SECTION: Slideshow Right -->
       <div class="hero-right">
         <div class="slideshow-container" style="cursor: pointer;" @click="advanceSlide">
-          <img :src="logoSrc" alt="HodlVault" class="slideshow-logo" />
           <div class="slide" :class="{ active: slideIndex === 0 }" style="display: block;">
-            <img src="https://plus.unsplash.com/premium_photo-1681487769650-a0c3fbaed81a?q=80&w=1000&auto=format&fit=crop" alt="System Interface">
+            <img :src="logoSrc" alt="HodlVault" class="slide-brand-img" />
+            <div class="slide-overlay">
+              <div class="slide-title">HODLOWL</div>
+              <div class="slide-description">Force-HODL Your Bitcoin Cash via Price-Target Smart Contracts.</div>
+            </div>
+          </div>
+          <div class="slide" :class="{ active: slideIndex === 1 }" style="display: block;">
+            <img src="https://images.unsplash.com/photo-1563986768609-322da13575f3?q=80&w=1000&auto=format&fit=crop" alt="System Interface">
             <div class="slide-overlay">
               <div class="slide-title">Non-Custodial Security</div>
               <div class="slide-description">Your assets remain under your control via mathematical smart contracts.</div>
             </div>
           </div>
-          <div class="slide" :class="{ active: slideIndex === 1 }" style="display: block;">
+          <div class="slide" :class="{ active: slideIndex === 2 }" style="display: block;">
             <img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=1000&auto=format&fit=crop" alt="Network Nodes">
             <div class="slide-overlay">
               <div class="slide-title">Global Oracle Network</div>
               <div class="slide-description">Fail-safe price monitoring across multiple Tier-1 data providers.</div>
             </div>
           </div>
-          <div class="slide" :class="{ active: slideIndex === 2 }" style="display: block;">
+          <div class="slide" :class="{ active: slideIndex === 3 }" style="display: block;">
             <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=1000&auto=format&fit=crop" alt="Digital Future">
             <div class="slide-overlay">
               <div class="slide-title">Automated Execution</div>
@@ -65,6 +71,7 @@
             <button class="dot-btn" :class="{ active: slideIndex === 0 }" @click="goToSlide(0)"></button>
             <button class="dot-btn" :class="{ active: slideIndex === 1 }" @click="goToSlide(1)"></button>
             <button class="dot-btn" :class="{ active: slideIndex === 2 }" @click="goToSlide(2)"></button>
+            <button class="dot-btn" :class="{ active: slideIndex === 3 }" @click="goToSlide(3)"></button>
           </div>
         </div>
       </div>
@@ -123,7 +130,7 @@ export default defineComponent({
 
     showSlides() {
       this.slideIndex++;
-      if (this.slideIndex > 2) this.slideIndex = 0;
+      if (this.slideIndex > 3) this.slideIndex = 0;
       this.slideTimeout = setTimeout(this.showSlides, 4000);
     },
     startSlideshow() {

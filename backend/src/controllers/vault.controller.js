@@ -714,6 +714,7 @@ export const getGlobalStats = async (req, res) => {
 
     console.log('[DEBUG] getGlobalStats aggregation result:', JSON.stringify(data))
     console.log('[DEBUG] totalBalance (satoshis):', data.totalBalance, 'totalLockedBCH:', (data.totalBalance || 0) / 100000000)
+    console.log('[DEBUG] lockedRankingRaw count:', lockedRankingRaw.length, 'samples:', JSON.stringify(lockedRankingRaw.slice(0, 3)))
     console.log('[DEBUG] withdrawalCount from ActivityLog:', withdrawalCount)
 
     const walletQuery = typeof req.query.wallet === 'string' ? req.query.wallet.trim() : ''
