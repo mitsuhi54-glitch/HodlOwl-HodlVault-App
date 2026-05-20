@@ -553,7 +553,7 @@
   </main>
 
   <!-- Vault Management Modal -->
-  <q-dialog v-model="showVaultManageModal" persistent>
+  <q-dialog v-model="showVaultManageModal">
     <q-card class="modal-content" style="max-width: 700px; width: 100%">
       <q-card-section class="modal-header">
         <div style="display: flex; align-items: center; gap: 12px">
@@ -713,7 +713,7 @@
   </q-dialog>
 
   <!-- Manage vault: deposit QR modal -->
-  <q-dialog v-model="showQrModal" persistent>
+  <q-dialog v-model="showQrModal">
     <div
       style="
         position: relative;
@@ -761,7 +761,7 @@
   </q-dialog>
 
   <!-- Activity Modal -->
-  <q-dialog v-model="showActivityModal" persistent>
+  <q-dialog v-model="showActivityModal">
     <q-card class="modal-content" style="max-width: 800px; width: 100%">
       <q-card-section class="modal-header">
         <div style="display: flex; align-items: center; gap: 12px">
@@ -859,7 +859,7 @@
   </q-dialog>
 
   <!-- Leaderboard Modal -->
-  <q-dialog v-model="showLeaderboardModal" persistent>
+  <q-dialog v-model="showLeaderboardModal">
     <q-card class="modal-content" style="max-width: 720px; width: 100%">
       <q-card-section class="modal-header">
         <div style="display: flex; align-items: center; gap: 12px">
@@ -919,7 +919,7 @@
   </q-dialog>
 
   <!-- Profile Setup Modal -->
-  <q-dialog v-model="showProfileModal" persistent>
+  <q-dialog v-model="showProfileModal">
     <q-card class="modal-content" style="max-width: 480px; width: 100%">
       <q-card-section class="modal-header">
         <div style="display: flex; align-items: center; gap: 12px">

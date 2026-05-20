@@ -38,6 +38,7 @@
       <!-- SECTION: Slideshow Right -->
       <div class="hero-right">
         <div class="slideshow-container" style="cursor: pointer;" @click="advanceSlide">
+          <img :src="logoSrc" alt="HodlVault" class="slideshow-logo" />
           <div class="slide" :class="{ active: slideIndex === 0 }" style="display: block;">
             <img src="https://plus.unsplash.com/premium_photo-1681487769650-a0c3fbaed81a?q=80&w=1000&auto=format&fit=crop" alt="System Interface">
             <div class="slide-overlay">
@@ -74,12 +75,14 @@
 
 <script>
 import { defineComponent } from 'vue'
+import logoSrc from 'src/assets/images/mascot/logo.webp'
 import { vaultApi } from 'src/services/api.service'
 
 export default defineComponent({
   name: 'IndexPage',
   data() {
     return {
+      logoSrc,
       slideIndex: 0,
       slideTimeout: null,
       stats: {

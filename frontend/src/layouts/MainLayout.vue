@@ -4,7 +4,7 @@
       <q-header class="app-header" :height-hint="64">
         <div class="container header-content">
           <router-link to="/" class="brand">
-            <i class="material-icons text-neon" style="font-size: 20px;">lock</i>
+            <img :src="logoSrc" alt="HodlVault" style="height: 20px; width: auto;" />
             <span>HODLOWL</span>
           </router-link>
 
@@ -60,7 +60,7 @@
       <q-footer>
         <div class="container footer-content">
           <div class="footer-left">
-            &copy; 2024 HODLOWL WEB APP
+            &copy; 2026 HODLOWL WEB APP
           </div>
           <div class="footer-right">
             <span class="status-item">SYSTEM VERSION: v2.3.0</span>
@@ -71,7 +71,7 @@
     </q-layout>
 
     <!-- Notification Modal -->
-    <q-dialog v-model="showNotificationModal" persistent>
+    <q-dialog v-model="showNotificationModal">
       <q-card style="max-width: 420px; width: 100%;">
         <q-card-section class="modal-header">
           <h3 style="margin: 0; font-size: 16px; font-family: var(--font-heading);">Notification Settings</h3>
@@ -145,6 +145,7 @@
 
 <script>
 import { defineComponent } from 'vue'
+import logoSrc from 'src/assets/images/mascot/logo.webp'
 import {
   requestNotificationPermission,
   unsubscribeFromNotifications,
@@ -161,6 +162,7 @@ export default defineComponent({
 
   data() {
     return {
+      logoSrc,
       connecting: false,
       showNotificationModal: false,
       inactivityTimer: null,

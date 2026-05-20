@@ -410,7 +410,7 @@
     </div>
 
     <!-- Activity History Modal -->
-    <q-dialog v-model="showActivityHistory" persistent>
+    <q-dialog v-model="showActivityHistory">
       <q-card
         :class="$q.dark.isActive ? 'bg-grey-9' : 'bg-white'"
         style="max-width: 800px; width: 90vw"
