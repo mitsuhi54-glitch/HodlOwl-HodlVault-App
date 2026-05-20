@@ -1,5 +1,5 @@
 <template>
-  <div :data-theme="$q.dark.isActive ? 'dark' : 'light'">
+  <div>
     <q-layout view="lHh Lpr lFf">
       <q-header class="app-header" :height-hint="64">
         <div class="container header-content">
@@ -37,7 +37,7 @@
                 </span>
               </span>
             </button>
-            <button v-if="!connectedAddress" class="btn--icon" style="background:none; border:1px solid #ffb800; color:#ffb800; cursor:pointer; font-size:10px; padding:2px 8px; border-radius:4px; font-family:var(--font-mono);" @click="onMockConnect" title="Mock wallet for testing">
+            <button v-if="!connectedAddress" class="btn--icon" style="background:none; border:1px solid var(--color-warning); color:var(--color-warning); cursor:pointer; font-size:10px; padding:2px 8px; border-radius:4px; font-family:var(--font-mono);" @click="onMockConnect" title="Mock wallet for testing">
               MOCK
             </button>
             <button class="btn--icon" style="background:none; border:none; color:inherit; cursor:pointer;" @click="onTestClick">
@@ -64,7 +64,7 @@
           </div>
           <div class="footer-right">
             <span class="status-item">SYSTEM VERSION: v2.3.0</span>
-            <span class="status-item text-neon">NETWORK: CHIPNET</span>
+            <span class="status-item" :class="networkLabel === 'CHIPNET' ? 'text-neon' : (networkLabel === 'MAINNET' ? 'text-green' : 'text-grey')">NETWORK: {{ networkLabel }}</span>
           </div>
         </div>
       </q-footer>
@@ -90,7 +90,7 @@
             </label>
           </div>
           <div v-if="notificationPermissionDenied" class="text-muted" style="font-size: 10px; display: flex; align-items: center; gap: 4px; margin-top: -8px;">
-            <i class="material-icons" style="font-size: 12px; color: #ffb800;">warning</i>
+            <i class="material-icons" style="font-size: 12px; color: var(--color-warning);">warning</i>
             Permission denied. Enable in browser settings.
           </div>
 
@@ -112,7 +112,7 @@
               <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0;">
                 <span class="text-mono" style="font-size: 12px; flex: 1;">{{ savedEmail }}</span>
                 <span v-if="emailVerified" style="font-size: 10px; color: var(--color-neon); font-weight: 700;">VERIFIED</span>
-                <span v-else style="font-size: 10px; color: #ffb800; font-weight: 700;">UNVERIFIED</span>
+                <span v-else style="font-size: 10px; color: var(--color-warning); font-weight: 700;">UNVERIFIED</span>
                 <button style="background: none; border: none; color: #ff3366; cursor: pointer; font-size: 16px; padding: 0 4px;" @click="removeEmail" title="Remove email">&times;</button>
               </div>
               <!-- Verification code input (shown when unverified) -->
@@ -196,6 +196,14 @@ export default defineComponent({
     isDashboardRoute() {
       return this.$route.path === '/dashboard'
     },
+
+    networkLabel() {
+      const address = this.$store.state.wallet?.address
+      if (!address) return 'DISCONNECTED'
+      if (address.includes('bitcoincash:')) return 'MAINNET'
+      if (address.includes('bchtest:') || address.includes('chipnet:')) return 'CHIPNET'
+      return 'DISCONNECTED'
+    },
   },
 
   watch: {
@@ -242,11 +250,15 @@ export default defineComponent({
   methods: {
     initializeTheme() {
       const savedTheme = localStorage.getItem('theme')
+      let isDark
       if (savedTheme) {
-        this.$q.dark.set(savedTheme === 'dark')
+        isDark = savedTheme === 'dark'
+        this.$q.dark.set(isDark)
       } else {
-        this.$q.dark.set(window.matchMedia('(prefers-color-scheme: dark)').matches)
+        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        this.$q.dark.set(isDark)
       }
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
     },
 
     // ─── Inactivity Timeout ─────────────────────────────────
@@ -606,7 +618,9 @@ export default defineComponent({
 
     toggleTheme() {
       this.$q.dark.toggle()
-      localStorage.setItem('theme', this.$q.dark.isActive ? 'dark' : 'light')
+      const isDark = this.$q.dark.isActive
+      localStorage.setItem('theme', isDark ? 'dark' : 'light')
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
     },
   },
 })

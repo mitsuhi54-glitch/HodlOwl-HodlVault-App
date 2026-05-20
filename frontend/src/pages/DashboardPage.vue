@@ -3,7 +3,7 @@
     <div class="page-grid">
       <!-- LEFT SIDEBAR -->
       <aside>
-        <div class="card card--elevated hodler-rank-card" style="padding: 20px">
+        <div class="card card--elevated hodler-rank-card" style="padding: 20px; cursor: pointer" @click="showLeaderboardModal = true; fetchRankings()">
           <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;">
             <span class="label-tiny" style="margin-bottom: 0;">Hodler Rank</span>
             <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">All Time</span>
@@ -26,14 +26,21 @@
               v-for="row in hodlerRankRows"
               :key="row.key"
               class="hodler-rank-card__row"
-              :title="row.showMedal ? `Top ${rankingTopLimit} hodler` : `Rank #${row.rank}`"
             >
               <span class="hodler-rank-card__medal-slot">
                 <i v-if="row.showMedal" class="material-icons hodler-rank-card__medal"
                   >emoji_events</i
                 >
               </span>
-              <span class="hodler-rank-card__rank text-neon text-mono">#{{ row.rank }}</span>
+              <span
+                v-if="row.notRanked"
+                class="hodler-rank-card__rank"
+                style="font-size: 11px; color: var(--color-text-dim); min-width: 2.25rem; flex-shrink: 0;"
+                >Not Ranked</span
+              >
+              <span v-else class="hodler-rank-card__rank text-neon text-mono"
+                >#{{ row.rank }}</span
+              >
               <span class="hodler-rank-card__type">{{ row.label }}</span>
             </div>
           </div>
@@ -58,14 +65,14 @@
             <i v-else-if="oracleSuccess" class="material-icons text-neon" style="font-size: 16px"
               >check_circle</i
             >
-            <i v-else class="material-icons" style="color: #ffb300; font-size: 16px">warning</i>
+            <i v-else class="material-icons" style="color: var(--color-warning); font-size: 16px">warning</i>
             <span v-if="priceLoading" style="font-size: 12px; color: var(--color-text-dim)"
               >Fetching oracle price...</span
             >
             <span v-else-if="oracleSuccess" style="font-size: 12px; color: var(--color-neon)"
               >Oracle online</span
             >
-            <span v-else style="font-size: 12px; color: #ffb300"
+            <span v-else style="font-size: 12px; color: var(--color-warning)"
               >Oracle unavailable — refresh before deploying</span
             >
           </div>
@@ -87,20 +94,9 @@
           </div>
           <div style="display: flex; justify-content: space-between; margin-top: 8px">
             <span class="text-muted" style="font-size: 13px">Network Fee</span>
-            <span style="color: #ffb800; font-family: var(--font-mono); font-size: 12px"
+            <span style="color: var(--color-warning); font-family: var(--font-mono); font-size: 12px"
               >1 sat/B</span
             >
-          </div>
-          <div
-            v-if="walletConnected && vaults.length > 0"
-            style="margin-top: 12px; border-top: 1px solid var(--color-border); padding-top: 12px"
-          >
-            <div style="display: flex; justify-content: space-between; font-size: 12px">
-              <span class="text-muted">Avg Progress</span>
-              <span class="text-neon" style="font-family: var(--font-mono)"
-                >{{ avgProgress }}%</span
-              >
-            </div>
           </div>
         </div>
 
@@ -180,7 +176,7 @@
             <div
               v-if="loadingVaults"
               style="
-                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                border-top: 1px solid var(--color-border);
                 margin-top: 16px;
                 padding-top: 12px;
               "
@@ -191,7 +187,7 @@
             <div
               v-else
               style="
-                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                border-top: 1px solid var(--color-border);
                 margin-top: 16px;
                 padding-top: 12px;
                 display: flex;
@@ -361,6 +357,12 @@
             "
           >
             <h2 class="label-tiny" style="margin: 0">Active Vaults</h2>
+            <span
+              v-if="walletConnected && vaults.length > 0"
+              class="text-neon"
+              style="font-family: var(--font-mono); font-size: 12px"
+              >Avg Progress: {{ avgProgress }}%</span
+            >
           </div>
 
           <div id="vaults-list">
@@ -716,7 +718,7 @@
         style="
           margin-top: 16px;
           font-size: 12px;
-          color: #111;
+          color: var(--color-text-dim);
           word-break: break-all;
           text-align: center;
         "
@@ -823,6 +825,86 @@
       </q-card-section>
     </q-card>
   </q-dialog>
+
+  <!-- Leaderboard Modal -->
+  <q-dialog v-model="showLeaderboardModal" persistent>
+    <q-card class="modal-content" style="max-width: 600px; width: 100%">
+      <q-card-section class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <i class="material-icons text-neon" style="font-size: 24px">leaderboard</i>
+          <h3 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-heading);">
+            Leaderboard — Top {{ rankingTopLimit }}
+          </h3>
+        </div>
+        <q-btn flat dense round icon="close" v-close-popup />
+      </q-card-section>
+      <q-card-section class="modal-body">
+        <div v-if="loadingRankings" style="text-align: center; padding: 40px; color: var(--color-text-dim);">
+          Loading leaderboard...
+        </div>
+        <div v-else style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <!-- BCH Locked ranking -->
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span class="label-tiny" style="margin: 0;">BCH Amount Locked</span>
+              <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">All Time</span>
+            </div>
+            <div v-if="rankings.lockedBCH.length === 0" class="text-muted" style="font-size: 12px; padding: 16px 0;">
+              No data yet.
+            </div>
+            <div v-else class="leaderboard-table">
+              <div class="leaderboard-table__header">
+                <span>#</span>
+                <span>Wallet</span>
+                <span>Locked</span>
+                <span>Vaults</span>
+              </div>
+              <div
+                v-for="(entry, i) in rankings.lockedBCH"
+                :key="entry.walletAddress"
+                class="leaderboard-table__row"
+                :class="{ 'leaderboard-table__row--me': entry.walletAddress === walletAddress }"
+              >
+                <span class="leaderboard-table__rank">{{ i + 1 }}</span>
+                <span class="leaderboard-table__wallet">{{ truncateAddress(entry.walletAddress) }}</span>
+                <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
+                <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Vault Count ranking -->
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span class="label-tiny" style="margin: 0;">Vaults Created</span>
+              <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">All Time</span>
+            </div>
+            <div v-if="rankings.vaultCount.length === 0" class="text-muted" style="font-size: 12px; padding: 16px 0;">
+              No data yet.
+            </div>
+            <div v-else class="leaderboard-table">
+              <div class="leaderboard-table__header">
+                <span>#</span>
+                <span>Wallet</span>
+                <span>Count</span>
+                <span>Locked</span>
+              </div>
+              <div
+                v-for="(entry, i) in rankings.vaultCount"
+                :key="entry.walletAddress"
+                class="leaderboard-table__row"
+                :class="{ 'leaderboard-table__row--me': entry.walletAddress === walletAddress }"
+              >
+                <span class="leaderboard-table__rank">{{ i + 1 }}</span>
+                <span class="leaderboard-table__wallet">{{ truncateAddress(entry.walletAddress) }}</span>
+                <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
+                <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script>
@@ -876,6 +958,12 @@ export default defineComponent({
         vaultCreated: null,
       },
       loadingHodlerRank: false,
+      showLeaderboardModal: false,
+      loadingRankings: false,
+      rankings: {
+        lockedBCH: [],
+        vaultCount: [],
+      },
 
       // Vault list
       vaults: [],
@@ -949,21 +1037,23 @@ export default defineComponent({
       if (!this.walletConnected || !this.userRanks) return []
       const rows = []
       const locked = this.userRanks.lockedFund
-      if (locked?.rank) {
+      if (locked) {
         rows.push({
           key: 'locked',
           rank: locked.rank,
           label: 'BCH amount locked',
-          showMedal: locked.rank <= this.rankingTopLimit,
+          showMedal: locked.rank && locked.rank <= this.rankingTopLimit,
+          notRanked: !locked.rank || locked.rank > this.rankingTopLimit,
         })
       }
       const vault = this.userRanks.vaultCreated
-      if (vault?.rank) {
+      if (vault) {
         rows.push({
           key: 'vault',
           rank: vault.rank,
           label: 'Vaults Created',
-          showMedal: vault.rank <= this.rankingTopLimit,
+          showMedal: vault.rank && vault.rank <= this.rankingTopLimit,
+          notRanked: !vault.rank || vault.rank > this.rankingTopLimit,
         })
       }
       return rows
@@ -1115,6 +1205,7 @@ export default defineComponent({
         this.vaults = []
         this.walletSats = 0
         this.userRanks = { lockedFund: null, vaultCreated: null }
+        this.rankings = { lockedBCH: [], vaultCount: [] }
         this.activityLogs = []
         disconnectSSE()
       }
@@ -1201,11 +1292,40 @@ export default defineComponent({
         } else if (!wallet) {
           this.userRanks = { lockedFund: null, vaultCreated: null }
         }
+        if (resp?.rankings) {
+          this.rankings = {
+            lockedBCH: resp.rankings.lockedBCH || [],
+            vaultCount: resp.rankings.vaultCount || [],
+          }
+        }
       } catch (e) {
         console.warn('[HodlerRank] Failed to fetch:', e?.message || e)
       } finally {
         this.loadingHodlerRank = false
       }
+    },
+
+    async fetchRankings() {
+      if (this.loadingRankings) return
+      this.loadingRankings = true
+      try {
+        const resp = await vaultApi.getGlobalStats(this.rankingTopLimit)
+        if (resp?.rankings) {
+          this.rankings = {
+            lockedBCH: resp.rankings.lockedBCH || [],
+            vaultCount: resp.rankings.vaultCount || [],
+          }
+        }
+      } catch (e) {
+        console.warn('[Leaderboard] Failed to fetch rankings:', e?.message || e)
+      } finally {
+        this.loadingRankings = false
+      }
+    },
+
+    truncateAddress(addr) {
+      if (!addr) return ''
+      return addr.slice(0, 6) + '...' + addr.slice(-4)
     },
 
     // ─── Wallet Balance ──────────────────────────────────────

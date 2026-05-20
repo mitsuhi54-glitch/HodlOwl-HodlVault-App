@@ -53,7 +53,7 @@
             flat
             bordered
             class="q-mb-lg"
-            style="background-color: #1e1e1e; border-color: #333"
+            style="background-color: var(--color-surface); border-color: var(--color-border)"
           >
             <q-card-section class="text-center">
               <h2 class="text-h4 text-weight-bold text-white q-mb-md">Create New Vault</h2>
@@ -68,7 +68,7 @@
                     flat
                     bordered
                     class="q-pa-md"
-                    style="background-color: #2a2a2a; border-color: #444"
+                    style="background-color: var(--color-surface-elevated); border-color: var(--color-border)"
                   >
                     <div class="text-subtitle2 text-grey-4 q-mb-sm">Connected Address</div>
                     <div class="text-caption text-primary q-mb-xs">
@@ -89,11 +89,9 @@
                     v-model="form.vaultName"
                     type="text"
                     outlined
-                    dark
                     placeholder="My HODL Vault"
                     class="text-h6"
                     input-class="text-center"
-                    style="background-color: #2a2a2a"
                     hint="Give your vault a memorable name"
                     persistent-hint
                   >
@@ -116,11 +114,9 @@
                     step="0.01"
                     min="0.01"
                     outlined
-                    dark
                     placeholder="Enter your target price per BCH"
                     class="text-h6"
                     input-class="text-center"
-                    style="background-color: #2a2a2a"
                     :rules="[(val) => val > 0 || 'Price target must be greater than 0']"
                     :hint="
                       currentBchPrice

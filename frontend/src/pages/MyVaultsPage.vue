@@ -82,7 +82,6 @@
               flat
               bordered
               class="vault-card cursor-pointer"
-              style="background-color: #1e1e1e; border-color: #333"
               @click="selectVault(vault)"
             >
               <q-card-section class="q-pa-lg">
@@ -217,9 +216,9 @@
               flat
               bordered
               class="q-pa-lg"
-              style="background-color: #1e1e1e; border-color: #333"
+              style="background-color: var(--color-surface); border-color: var(--color-border)"
             >
-              <div class="text-h6 text-weight-bold text-white q-mb-md">Portfolio Summary</div>
+              <div class="text-h6 text-weight-bold q-mb-md">Portfolio Summary</div>
 
               <!-- Main Stats Row -->
               <div class="row q-gutter-lg">
@@ -1417,7 +1416,7 @@ export default defineComponent({
   border-radius: 0 0 12px 12px;
 }
 
-/* Custom primary color override */
+/* Custom primary color override — uses CSS vars from data-theme on root div */
 .q-btn.color-primary {
   background-color: #00d588 !important;
   color: #000 !important;

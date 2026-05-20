@@ -1223,6 +1223,7 @@ input:checked + .toggle-slider:before {
 .body--dark {
   .q-header, .q-footer {
     background-color: var(--color-bg) !important;
+    color: var(--color-text) !important;
   }
   .q-card {
     background-color: var(--color-surface) !important;
@@ -1247,6 +1248,7 @@ input:checked + .toggle-slider:before {
 .body--light {
   .q-header, .q-footer {
     background-color: var(--color-bg) !important;
+    color: var(--color-text) !important;
   }
   .q-card {
     background-color: var(--color-surface) !important;
@@ -1261,6 +1263,70 @@ input:checked + .toggle-slider:before {
   }
   .q-dialog .q-card {
     background-color: var(--color-page) !important;
+  }
+  .q-dialog__backdrop {
+    background: rgba(0, 0, 0, 0.4) !important;
+  }
+  .q-btn--outline {
+    border-color: var(--color-border) !important;
+    color: var(--color-text) !important;
+  }
+  .q-menu {
+    background: var(--color-page) !important;
+    border: 1px solid var(--color-border);
+  }
+  .q-item {
+    color: var(--color-text) !important;
+  }
+  .q-item:hover {
+    background: var(--color-glass-hover) !important;
+  }
+  .q-tooltip {
+    background: var(--color-surface-elevated) !important;
+    color: var(--color-text) !important;
+    border: 1px solid var(--color-border);
+  }
+  .q-chip {
+    background: var(--color-surface) !important;
+    color: var(--color-text) !important;
+    border: 1px solid var(--color-border);
+  }
+  .q-badge {
+    color: #fff !important;
+  }
+  .q-notification {
+    background: var(--color-page) !important;
+    color: var(--color-text) !important;
+    border: 1px solid var(--color-border);
+  }
+  .q-select__dropdown {
+    background: var(--color-page) !important;
+    border: 1px solid var(--color-border);
+  }
+  .q-stepper {
+    background: var(--color-page) !important;
+  }
+  .q-stepper__step--active .q-stepper__step-inner {
+    background: var(--color-surface) !important;
+  }
+  .q-table, .q-markup-table {
+    background: var(--color-page) !important;
+    color: var(--color-text) !important;
+  }
+  .q-table th {
+    color: var(--color-text-muted) !important;
+  }
+  .q-table tbody td {
+    color: var(--color-text) !important;
+  }
+  .q-pagination .q-btn {
+    color: var(--color-text) !important;
+  }
+  .q-field--filled .q-field__control {
+    background: var(--color-surface-input) !important;
+  }
+  .q-field--outlined .q-field__control {
+    background: var(--color-surface-input) !important;
   }
 }
 
@@ -1310,6 +1376,58 @@ input:checked + .toggle-slider:before {
   font-size: 12px;
   color: var(--color-text-muted);
   letter-spacing: 0.02em;
+}
+
+/* Leaderboard table */
+.leaderboard-table {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.leaderboard-table__header {
+  display: grid;
+  grid-template-columns: 28px 1fr 90px 60px;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.leaderboard-table__row {
+  display: grid;
+  grid-template-columns: 28px 1fr 90px 60px;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  align-items: center;
+}
+
+.leaderboard-table__row--me {
+  background: rgba(0, 255, 136, 0.08);
+  outline: 1px solid var(--color-neon-dim);
+}
+
+.leaderboard-table__rank {
+  font-weight: 700;
+  color: var(--color-neon);
+  font-family: var(--font-mono);
+  text-align: center;
+}
+
+.leaderboard-table__wallet {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+.leaderboard-table__value {
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  text-align: right;
 }
 
 /* Active vaults empty state (UI model) */
