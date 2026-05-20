@@ -257,9 +257,26 @@ export async function checkAndWithdraw() {
           console.warn('[AutoWithdraw] Failed to log activity:', logError.message)
         }
 
-        console.log(
-          `[AutoWithdraw] ✅ Vault ${vault.contractAddress} marked as withdrawn (kept in DB for stats)`,
-        )
+        // Auto-delete vault after successful withdrawal (same as manual withdrawal)
+        try {
+          await logActivity({
+            walletAddress: vault.walletAddress,
+            activityType: 'VAULT_DELETED',
+            vaultId: vault._id,
+            vaultName: vault.name || 'Unnamed Vault',
+            contractAddress: vault.contractAddress,
+            details: {
+              reason: 'Auto-deleted after successful withdrawal',
+              autoWithdrawal: true,
+            },
+          })
+          await Vault.findByIdAndDelete(vault._id)
+          console.log(
+            `[AutoWithdraw] ✅ Vault ${vault.contractAddress} auto-deleted after withdrawal`,
+          )
+        } catch (deleteError) {
+          console.warn('[AutoWithdraw] Failed to auto-delete vault:', deleteError.message)
+        }
 
         // Notify client in real-time via SSE
         sendEvent(vault.walletAddress, {

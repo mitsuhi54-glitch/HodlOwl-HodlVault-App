@@ -101,7 +101,7 @@
       <div class="arch-diagram">
         <div class="arch-card">USER (PAYTACA WALLET)</div>
         <div class="arch-arrow"><i class="material-icons">south</i></div>
-        <div class="arch-card" style="border-color: var(--color-neon);">HODLVAULT FRONTEND</div>
+        <div class="arch-card" style="border-color: var(--color-neon);">HODLOWL FRONTEND</div>
         <div class="arch-arrow"><i class="material-icons">sync</i></div>
         <div class="arch-card">BLOCKCHAIN (BCH) & ORACLE</div>
       </div>
@@ -261,7 +261,7 @@
         </div>
       </div>
       <div style="margin-top: 40px; text-align: center;">
-        <p style="font-size: 11px; color: var(--color-text-dim);">HODLVAULT &mdash; disciplined investing, enforced by code.</p>
+        <p style="font-size: 11px; color: var(--color-text-dim);">HODLOWL &mdash; disciplined investing, enforced by code.</p>
         <div style="display: flex; justify-content: center; gap: 16px; margin-top: 24px;">
           <router-link to="/dashboard" class="btn btn--primary" style="padding: 10px 20px; font-size: 12px;">Dashboard</router-link>
           <router-link to="/" class="btn btn--outline" style="padding: 10px 20px; font-size: 12px;">Home</router-link>

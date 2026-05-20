@@ -36,6 +36,11 @@ const walletPreferencesSchema = new mongoose.Schema(
       trim: true,
       maxlength: 30,
     },
+    avatarSeed: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     preferences: {
       autoWithdrawal: {
         type: Boolean,
@@ -110,6 +115,9 @@ walletPreferencesSchema.statics.updatePreferences = async function (walletAddres
   // Top-level fields
   if (newPreferences.profileName !== undefined) {
     updateData.profileName = newPreferences.profileName || null
+  }
+  if (newPreferences.avatarSeed !== undefined) {
+    updateData.avatarSeed = newPreferences.avatarSeed || null
   }
 
   const preferences = await this.findOneAndUpdate(

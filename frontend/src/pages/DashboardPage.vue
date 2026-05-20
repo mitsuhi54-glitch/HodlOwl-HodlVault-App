@@ -251,52 +251,27 @@
               <i class="material-icons create-vault-header__avatar-icon">person_outline</i>
               <span class="create-vault-header__avatar-label">Wallet not connected</span>
             </div>
-            <!-- Connected state: slideshow background + profile overlay -->
+            <!-- Connected state: DiceBear avatar + profile overlay -->
             <template v-else>
+              <!-- DiceBear avatar when seed is set -->
               <div
-                class="slide"
-                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+                v-if="avatarSeed"
+                class="profile-header-avatar"
               >
                 <img
-                  src="https://images.unsplash.com/photo-1639762681485-074b7f4ec651?auto=format&fit=crop&q=80&w=400"
-                  style="
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    opacity: 0.8;
-                    mix-blend-mode: screen;
-                  "
+                  :src="`https://api.dicebear.com/7.x/pixel-art/svg?seed=${avatarSeed}`"
+                  alt="Avatar"
+                  class="profile-header-avatar__img"
+                  loading="lazy"
+                  @error="onAvatarError"
                 />
               </div>
+              <!-- Fallback initials -->
               <div
-                class="slide"
-                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+                v-else
+                class="profile-header-avatar profile-header-avatar--fallback"
               >
-                <img
-                  src="https://images.unsplash.com/photo-1618044733300-9472054094ee?auto=format&fit=crop&q=80&w=400"
-                  style="
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    opacity: 0.8;
-                    mix-blend-mode: screen;
-                  "
-                />
-              </div>
-              <div
-                class="slide"
-                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=400"
-                  style="
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    opacity: 0.8;
-                    mix-blend-mode: screen;
-                  "
-                />
+                <span class="profile-header-avatar__initials">{{ getInitials(profileName) }}</span>
               </div>
               <!-- Profile name overlay -->
               <div
@@ -885,12 +860,12 @@
 
   <!-- Leaderboard Modal -->
   <q-dialog v-model="showLeaderboardModal" persistent>
-    <q-card class="modal-content" style="max-width: 600px; width: 100%">
+    <q-card class="modal-content" style="max-width: 720px; width: 100%">
       <q-card-section class="modal-header">
         <div style="display: flex; align-items: center; gap: 12px">
           <i class="material-icons text-neon" style="font-size: 24px">leaderboard</i>
           <h3 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-heading);">
-            Leaderboard — Top {{ rankingTopLimit }}
+            BCH Leaderboard — Top {{ rankingTopLimit }}
           </h3>
         </div>
         <q-btn flat dense round icon="close" v-close-popup />
@@ -899,63 +874,43 @@
         <div v-if="loadingRankings" style="text-align: center; padding: 40px; color: var(--color-text-dim);">
           Loading leaderboard...
         </div>
-        <div v-else style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          <!-- BCH Locked ranking -->
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-              <span class="label-tiny" style="margin: 0;">BCH Amount Locked</span>
-              <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">All Time</span>
-            </div>
-            <div v-if="rankings.lockedBCH.length === 0" class="text-muted" style="font-size: 12px; padding: 16px 0;">
-              No data yet.
-            </div>
-            <div v-else class="leaderboard-table">
-              <div class="leaderboard-table__header">
-                <span>#</span>
-                <span>Wallet</span>
-                <span>Locked</span>
-                <span>Vaults</span>
-              </div>
-              <div
-                v-for="(entry, i) in rankings.lockedBCH"
-                :key="entry.walletAddress"
-                class="leaderboard-table__row"
-                :class="{ 'leaderboard-table__row--me': entry.walletAddress === walletAddress }"
-              >
-                <span class="leaderboard-table__rank">{{ i + 1 }}</span>
-                <span class="leaderboard-table__wallet">{{ entry.profileName || truncateAddress(entry.walletAddress) }}</span>
-                <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
-                <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
-              </div>
-            </div>
+        <div v-else>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <span class="label-tiny" style="margin: 0;">Largest BCH Locked</span>
+            <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Active Vaults</span>
           </div>
-          <!-- Vault Count ranking -->
-          <div>
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-              <span class="label-tiny" style="margin: 0;">Vaults Created</span>
-              <span class="text-neon text-mono" style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;">All Time</span>
+          <div v-if="rankings.lockedBCH.length === 0" class="text-muted" style="font-size: 12px; padding: 16px 0;">
+            No data yet.
+          </div>
+          <div v-else class="leaderboard-table">
+            <div class="leaderboard-table__header">
+              <span>Rank</span>
+              <span>Trader</span>
+              <span>BCH Locked</span>
+              <span>Vaults</span>
             </div>
-            <div v-if="rankings.vaultCount.length === 0" class="text-muted" style="font-size: 12px; padding: 16px 0;">
-              No data yet.
-            </div>
-            <div v-else class="leaderboard-table">
-              <div class="leaderboard-table__header">
-                <span>#</span>
-                <span>Wallet</span>
-                <span>Count</span>
-                <span>Locked</span>
-              </div>
-              <div
-                v-for="(entry, i) in rankings.vaultCount"
-                :key="entry.walletAddress"
-                class="leaderboard-table__row"
-                :class="{ 'leaderboard-table__row--me': entry.walletAddress === walletAddress }"
-              >
-                <span class="leaderboard-table__rank">{{ i + 1 }}</span>
-                <span class="leaderboard-table__wallet">{{ entry.profileName || truncateAddress(entry.walletAddress) }}</span>
-                <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
-                <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
-              </div>
+            <div
+              v-for="(entry, i) in rankings.lockedBCH"
+              :key="entry.walletAddress"
+              class="leaderboard-table__row"
+              :class="{ 'leaderboard-table__row--me': entry.walletAddress === walletAddress }"
+            >
+              <span class="leaderboard-table__rank">#{{ i + 1 }}</span>
+              <span class="leaderboard-table__wallet">
+                <img
+                  v-if="entry.avatarSeed"
+                  :src="`https://api.dicebear.com/7.x/pixel-art/svg?seed=${entry.avatarSeed}`"
+                  alt=""
+                  class="leaderboard-table__avatar"
+                  loading="lazy"
+                />
+                <span class="leaderboard-table__avatar leaderboard-table__avatar--fallback" v-else>
+                  {{ getInitials(entry.profileName) }}
+                </span>
+                <span class="leaderboard-table__name">{{ entry.profileName || truncateAddress(entry.walletAddress) }}</span>
+              </span>
+              <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
+              <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
             </div>
           </div>
         </div>
@@ -965,7 +920,7 @@
 
   <!-- Profile Setup Modal -->
   <q-dialog v-model="showProfileModal" persistent>
-    <q-card class="modal-content" style="max-width: 420px; width: 100%">
+    <q-card class="modal-content" style="max-width: 480px; width: 100%">
       <q-card-section class="modal-header">
         <div style="display: flex; align-items: center; gap: 12px">
           <i class="material-icons text-neon" style="font-size: 24px">person</i>
@@ -976,8 +931,51 @@
         <q-btn flat dense round icon="close" v-close-popup />
       </q-card-section>
       <q-card-section class="modal-body">
-        <div style="display: grid; gap: 16px;">
-          <div class="field">
+        <div class="profile-avatar-picker">
+          <!-- Avatar Preview -->
+          <div class="profile-avatar-preview">
+            <img
+              :src="`https://api.dicebear.com/7.x/pixel-art/svg?seed=${avatarSeedInput || 'default'}`"
+              alt="Avatar"
+              class="profile-avatar-preview__img"
+              loading="lazy"
+              @error="onAvatarError"
+            />
+          </div>
+          <!-- Avatar Options -->
+          <div class="profile-avatar-options">
+            <div class="profile-avatar-options__header">
+              <span class="label-tiny">Select Face</span>
+              <button
+                type="button"
+                class="btn btn--outline"
+                style="padding: 4px 12px; font-size: 10px; display: flex; align-items: center; gap: 4px;"
+                @click="generateAvatarOptions"
+              >
+                <i class="material-icons" style="font-size: 14px">refresh</i> Re-roll
+              </button>
+            </div>
+            <div class="profile-avatar-grid">
+              <button
+                v-for="seed in avatarOptions"
+                :key="seed"
+                type="button"
+                class="profile-avatar-option"
+                :class="{ 'profile-avatar-option--selected': avatarSeedInput === seed }"
+                @click="avatarSeedInput = seed"
+              >
+                <img
+                  :src="`https://api.dicebear.com/7.x/pixel-art/svg?seed=${seed}`"
+                  alt="Option"
+                  class="profile-avatar-option__img"
+                  loading="lazy"
+                  @error="onAvatarError"
+                />
+              </button>
+            </div>
+          </div>
+          <!-- Display Name -->
+          <div class="field" style="margin-top: 8px;">
             <label class="label-tiny">Display Name</label>
             <q-input
               v-model="profileNameInput"
@@ -1053,6 +1051,9 @@ export default defineComponent({
       // Profile
       profileName: null,
       profileNameInput: '',
+      avatarSeed: null,
+      avatarSeedInput: '',
+      avatarOptions: [],
       showProfileModal: false,
       savingProfile: false,
 
@@ -1060,14 +1061,12 @@ export default defineComponent({
       rankingTopLimit: 10,
       userRanks: {
         lockedFund: null,
-        vaultCreated: null,
       },
       loadingHodlerRank: false,
       showLeaderboardModal: false,
       loadingRankings: false,
       rankings: {
         lockedBCH: [],
-        vaultCount: [],
       },
 
       // Vault list
@@ -1140,28 +1139,17 @@ export default defineComponent({
 
     hodlerRankRows() {
       if (!this.walletConnected || !this.userRanks) return []
-      const rows = []
       const locked = this.userRanks.lockedFund
       if (locked) {
-        rows.push({
+        return [{
           key: 'locked',
           rank: locked.rank,
           label: 'BCH amount locked',
           showMedal: locked.rank && locked.rank <= this.rankingTopLimit,
           notRanked: !locked.rank || locked.rank > this.rankingTopLimit,
-        })
+        }]
       }
-      const vault = this.userRanks.vaultCreated
-      if (vault) {
-        rows.push({
-          key: 'vault',
-          rank: vault.rank,
-          label: 'Vaults Created',
-          showMedal: vault.rank && vault.rank <= this.rankingTopLimit,
-          notRanked: !vault.rank || vault.rank > this.rankingTopLimit,
-        })
-      }
-      return rows
+      return []
     },
 
     phpBalance() {
@@ -1310,8 +1298,8 @@ export default defineComponent({
         )
         this.vaults = []
         this.walletSats = 0
-        this.userRanks = { lockedFund: null, vaultCreated: null }
-        this.rankings = { lockedBCH: [], vaultCount: [] }
+        this.userRanks = { lockedFund: null }
+        this.rankings = { lockedBCH: [] }
         this.profileName = null
         this.activityLogs = []
         disconnectSSE()
@@ -1395,15 +1383,13 @@ export default defineComponent({
         if (resp?.userRanks) {
           this.userRanks = {
             lockedFund: resp.userRanks.lockedFund || null,
-            vaultCreated: resp.userRanks.vaultCreated || null,
           }
         } else if (!wallet) {
-          this.userRanks = { lockedFund: null, vaultCreated: null }
+          this.userRanks = { lockedFund: null }
         }
         if (resp?.rankings) {
           this.rankings = {
             lockedBCH: resp.rankings.lockedBCH || [],
-            vaultCount: resp.rankings.vaultCount || [],
           }
         }
       } catch (e) {
@@ -1421,7 +1407,6 @@ export default defineComponent({
         if (resp?.rankings) {
           this.rankings = {
             lockedBCH: resp.rankings.lockedBCH || [],
-            vaultCount: resp.rankings.vaultCount || [],
           }
         }
       } catch (e) {
@@ -1444,13 +1429,40 @@ export default defineComponent({
         if (resp?.profileName) {
           this.profileName = resp.profileName
         }
+        if (resp?.avatarSeed) {
+          this.avatarSeed = resp.avatarSeed
+        }
       } catch (e) {
         console.warn('[Profile] Failed to load:', e?.message || e)
       }
     },
 
+    generateAvatarOptions() {
+      const options = []
+      for (let i = 0; i < 6; i++) {
+        options.push(`face_${Math.random().toString(36).substring(2, 9)}`)
+      }
+      this.avatarOptions = options
+      if (!this.avatarSeedInput || !options.includes(this.avatarSeedInput)) {
+        this.avatarSeedInput = options[0]
+      }
+    },
+
+    getInitials(name) {
+      if (!name) return '?'
+      const parts = name.trim().split(/\s+/)
+      if (parts.length === 1) return parts[0][0].toUpperCase()
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    },
+
+    onAvatarError(e) {
+      e.target.style.display = 'none'
+    },
+
     openProfileModal() {
       this.profileNameInput = this.profileName || ''
+      this.avatarSeedInput = this.avatarSeed || ''
+      this.generateAvatarOptions()
       this.showProfileModal = true
     },
 
@@ -1459,8 +1471,12 @@ export default defineComponent({
       if (!name) return
       this.savingProfile = true
       try {
-        await preferencesApi.updatePreferences({ profileName: name })
+        await preferencesApi.updatePreferences({
+          profileName: name,
+          avatarSeed: this.avatarSeedInput || null,
+        })
         this.profileName = name
+        this.avatarSeed = this.avatarSeedInput || null
         this.showProfileModal = false
       } catch (e) {
         console.warn('[Profile] Failed to save:', e?.message || e)

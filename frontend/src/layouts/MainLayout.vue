@@ -5,7 +5,7 @@
         <div class="container header-content">
           <router-link to="/" class="brand">
             <i class="material-icons text-neon" style="font-size: 20px;">lock</i>
-            <span>HODLVAULT</span>
+            <span>HODLOWL</span>
           </router-link>
 
           <nav>
@@ -60,7 +60,7 @@
       <q-footer>
         <div class="container footer-content">
           <div class="footer-left">
-            &copy; 2024 HODLVAULT PROTOCOL
+            &copy; 2024 HODLOWL WEB APP
           </div>
           <div class="footer-right">
             <span class="status-item">SYSTEM VERSION: v2.3.0</span>

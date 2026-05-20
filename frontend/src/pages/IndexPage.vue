@@ -37,17 +37,6 @@
 
       <!-- SECTION: Slideshow Right -->
       <div class="hero-right">
-        <div class="oracle-strip" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 11px;">
-          <div style="display: flex; align-items: center; gap: 4px; color: var(--color-neon);">
-            <i class="material-icons" style="font-size: 14px;">check_circle</i>
-            <span class="text-mono">Oracle Status: Stable</span>
-          </div>
-          <div class="text-muted text-mono">
-            Latest Price: &hairsp;24,500.00
-          </div>
-          <a href="#" class="text-neon text-mono" style="text-decoration: none;">REFRESH</a>
-        </div>
-
         <div class="slideshow-container" style="cursor: pointer;" @click="advanceSlide">
           <div class="slide" :class="{ active: slideIndex === 0 }" style="display: block;">
             <img src="https://plus.unsplash.com/premium_photo-1681487769650-a0c3fbaed81a?q=80&w=1000&auto=format&fit=crop" alt="System Interface">

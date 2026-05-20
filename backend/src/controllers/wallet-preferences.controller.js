@@ -35,6 +35,7 @@ export const getWalletPreferences = async (req, res) => {
       email: preferences.email,
       emailVerified: preferences.emailVerified || false,
       profileName: preferences.profileName || null,
+      avatarSeed: preferences.avatarSeed || null,
       preferences: preferences.preferences,
       createdAt: preferences.createdAt,
       updatedAt: preferences.updatedAt,
@@ -70,6 +71,7 @@ export const updateWalletPreferences = async (req, res) => {
       message: 'Wallet preferences updated successfully',
       walletAddress: updatedPreferences.walletAddress,
       profileName: updatedPreferences.profileName || null,
+      avatarSeed: updatedPreferences.avatarSeed || null,
       preferences: updatedPreferences.preferences,
       updatedAt: updatedPreferences.updatedAt,
     }

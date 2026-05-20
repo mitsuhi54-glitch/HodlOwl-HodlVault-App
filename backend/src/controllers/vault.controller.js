@@ -1,4 +1,5 @@
 import { Vault } from '../models/vault.model.js'
+import { ActivityLog } from '../models/activity-log.model.js'
 import mongoose from 'mongoose'
 import { logActivity } from '../services/activity-log.service.js'
 
@@ -600,54 +601,34 @@ function mapLockedBCHRanking(entries) {
     totalBalanceBCH: entry.totalBalance / 100000000,
     vaultCount: entry.vaultCount,
     profileName: entry.profileName || null,
-  }))
-}
-
-function mapVaultCountRanking(entries) {
-  return entries.map((entry, index) => ({
-    rank: index + 1,
-    walletAddress: entry.walletAddress,
-    vaultCount: entry.vaultCount,
-    totalBalance: entry.totalBalance,
-    totalBalanceBCH: entry.totalBalance / 100000000,
-    profileName: entry.profileName || null,
+    avatarSeed: entry.avatarSeed || null,
   }))
 }
 
 async function getWalletRanks(walletAddress) {
   const normalized = walletAddress.toLowerCase()
 
-  const [allByLocked, allByVaultCount] = await Promise.all([
-    Vault.aggregate([
-      {
-        $group: {
-          _id: '$walletAddress',
-          totalBalance: { $sum: '$balance' },
-          vaultCount: { $sum: 1 },
-        },
+  const allByLocked = await Vault.aggregate([
+    { $match: { status: 'active' } },
+    {
+      $group: {
+        _id: '$walletAddress',
+        totalBalance: { $sum: '$balance' },
+        vaultCount: { $sum: 1 },
       },
-      { $sort: { totalBalance: -1, vaultCount: -1 } },
-    ]),
-    Vault.aggregate([
-      {
-        $group: {
-          _id: '$walletAddress',
-          vaultCount: { $sum: 1 },
-          totalBalance: { $sum: '$balance' },
-        },
-      },
-      { $sort: { vaultCount: -1, totalBalance: -1 } },
-    ]),
+    },
+    { $sort: { totalBalance: -1, vaultCount: -1 } },
   ])
 
   const lockedIdx = allByLocked.findIndex((e) => e._id === normalized)
-  const vaultIdx = allByVaultCount.findIndex((e) => e._id === normalized)
 
   const WalletPreferences = mongoose.model('WalletPreferences')
   let profileName = null
+  let avatarSeed = null
   try {
     const prefs = await WalletPreferences.findByWalletAddress(normalized)
     profileName = prefs?.profileName || null
+    avatarSeed = prefs?.avatarSeed || null
   } catch (_) { /* ignore */ }
 
   return {
@@ -659,16 +640,7 @@ async function getWalletRanks(walletAddress) {
             totalBalanceBCH: allByLocked[lockedIdx].totalBalance / 100000000,
             vaultCount: allByLocked[lockedIdx].vaultCount,
             profileName,
-          }
-        : null,
-    vaultCreated:
-      vaultIdx >= 0
-        ? {
-            rank: vaultIdx + 1,
-            vaultCount: allByVaultCount[vaultIdx].vaultCount,
-            totalBalance: allByVaultCount[vaultIdx].totalBalance,
-            totalBalanceBCH: allByVaultCount[vaultIdx].totalBalance / 100000000,
-            profileName,
+            avatarSeed,
           }
         : null,
   }
@@ -684,19 +656,19 @@ export const getGlobalStats = async (req, res) => {
       50,
     )
 
-    const [globalResult, lockedRankingRaw, vaultCountRankingRaw] = await Promise.all([
+    const [globalResult, lockedRankingRaw, withdrawalCount] = await Promise.all([
       Vault.aggregate([
         {
           $group: {
             _id: null,
             totalBalance: { $sum: '$balance' },
             activeVaults: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
-            withdrawnVaults: { $sum: { $cond: [{ $eq: ['$status', 'withdrawn'] }, 1, 0] } },
             totalVaults: { $sum: 1 },
           },
         },
       ]),
       Vault.aggregate([
+        { $match: { status: 'active' } },
         {
           $group: {
             _id: '$walletAddress',
@@ -717,6 +689,7 @@ export const getGlobalStats = async (req, res) => {
         {
           $addFields: {
             profileName: { $arrayElemAt: ['$prefs.profileName', 0] },
+            avatarSeed: { $arrayElemAt: ['$prefs.avatarSeed', 0] },
           },
         },
         {
@@ -726,54 +699,22 @@ export const getGlobalStats = async (req, res) => {
             totalBalance: 1,
             vaultCount: 1,
             profileName: 1,
+            avatarSeed: 1,
           },
         },
       ]),
-      Vault.aggregate([
-        {
-          $group: {
-            _id: '$walletAddress',
-            vaultCount: { $sum: 1 },
-            totalBalance: { $sum: '$balance' },
-          },
-        },
-        { $sort: { vaultCount: -1, totalBalance: -1 } },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: 'walletpreferences',
-            localField: '_id',
-            foreignField: 'walletAddress',
-            as: 'prefs',
-          },
-        },
-        {
-          $addFields: {
-            profileName: { $arrayElemAt: ['$prefs.profileName', 0] },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            walletAddress: '$_id',
-            vaultCount: 1,
-            totalBalance: 1,
-            profileName: 1,
-          },
-        },
-      ]),
+      ActivityLog.countDocuments({ activityType: 'WITHDRAWAL' }),
     ])
 
     const data = globalResult[0] || {
       totalBalance: 0,
       activeVaults: 0,
-      withdrawnVaults: 0,
       totalVaults: 0,
     }
 
     console.log('[DEBUG] getGlobalStats aggregation result:', JSON.stringify(data))
     console.log('[DEBUG] totalBalance (satoshis):', data.totalBalance, 'totalLockedBCH:', (data.totalBalance || 0) / 100000000)
-    console.log('[DEBUG] withdrawnVaults count:', data.withdrawnVaults, 'totalTargetPriceReached:', (data.withdrawnVaults || 0))
+    console.log('[DEBUG] withdrawalCount from ActivityLog:', withdrawalCount)
 
     const walletQuery = typeof req.query.wallet === 'string' ? req.query.wallet.trim() : ''
     let userRanks = null
@@ -789,11 +730,10 @@ export const getGlobalStats = async (req, res) => {
         totalLockedBCH: (data.totalBalance || 0) / 100000000,
         totalVaults: data.totalVaults || 0,
         activeVaults: data.activeVaults || 0,
-        totalTargetPriceReached: data.withdrawnVaults || 0,
+        totalTargetPriceReached: withdrawalCount || 0,
       },
       rankings: {
         lockedBCH: mapLockedBCHRanking(lockedRankingRaw),
-        vaultCount: mapVaultCountRanking(vaultCountRankingRaw),
       },
       userRanks,
     })
