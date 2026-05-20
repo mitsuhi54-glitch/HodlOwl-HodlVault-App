@@ -58,17 +58,21 @@ function getQueryProvider(network, hostname) {
 }
 
 function inferNetworkFromAddress(address) {
-  console.log('address', address)
   if (typeof address !== 'string') return DEFAULT_NETWORK
   const prefix = address.includes(':') ? address.split(':')[0] : null
-  if (prefix === 'bitcoincash') return 'mainnet'
-  if (prefix === 'bchtest') {
-    // Chipnet and testnet both use the "bchtest" prefix.
-    // If the app is configured for chipnet, respect that; otherwise default to testnet3.
-    return DEFAULT_NETWORK === 'chipnet' ? 'chipnet' : 'testnet3'
+  let result = DEFAULT_NETWORK
+  if (prefix === 'bitcoincash') result = 'mainnet'
+  else if (prefix === 'bchtest') {
+    result = DEFAULT_NETWORK === 'chipnet' ? 'chipnet' : 'testnet3'
   }
-  if (prefix === 'chipnet') return 'chipnet'
-  return DEFAULT_NETWORK
+  else if (prefix === 'chipnet') result = 'chipnet'
+  console.log('[DEBUG:network] inferNetworkFromAddress:', {
+    address: address.slice(0, 30) + '...',
+    prefix,
+    DEFAULT_NETWORK: typeof import.meta !== 'undefined' ? import.meta.env?.VITE_BCH_NETWORK || 'chipnet (default)' : 'chipnet (default)',
+    result,
+  })
+  return result
 }
 
 /**
@@ -77,8 +81,13 @@ function inferNetworkFromAddress(address) {
  */
 function getProvider(network) {
   const key = network || DEFAULT_NETWORK
-  if (contractProviders.has(key)) return contractProviders.get(key)
+  if (contractProviders.has(key)) {
+    const p = contractProviders.get(key)
+    return p
+  }
   const provider = new ElectrumNetworkProvider(key)
+  const hostname = provider.hostname || provider.opts?.hostname || 'default'
+  console.log('[DEBUG:provider] Created new ElectrumNetworkProvider:', { network: key, hostname })
   contractProviders.set(key, provider)
   return provider
 }
@@ -113,8 +122,12 @@ export async function getAddressBalance(address) {
 export function initializeHodlVaultContract(ownerPkhHex, oraclePkHex, priceTarget, ownerAddress) {
   const network = inferNetworkFromAddress(ownerAddress)
   const provider = getProvider(network)
-  console.log('provider', provider)
-  console.log('ownerAddress[p[[[[[[[[[[', ownerAddress)
+  console.log('[DEBUG:contract] initializeHodlVaultContract:', {
+    network,
+    ownerAddress: ownerAddress?.slice(0, 30) + '...',
+    providerNetwork: provider.network,
+    providerHostname: provider.hostname || provider.opts?.hostname || 'default',
+  })
 
   // Convert hex strings to bytes for constructor
   const ownerPkh = hexToBin(ownerPkhHex)
@@ -473,12 +486,20 @@ export async function spendVault(
 
 async function broadcastTransaction(signedHex, provider) {
   try {
+    console.log('[DEBUG:broadcastTx] Broadcasting transaction...', {
+      hexLength: signedHex?.length,
+      providerNetwork: provider?.network || 'unknown',
+    })
     const txid = await provider.sendRawTransaction(signedHex)
-    console.log('DEBUG: Transaction broadcast successfully:', txid)
+    console.log('[DEBUG:broadcastTx] Transaction broadcast successfully:', {
+      txid,
+      txidLength: txid?.length,
+      is64Hex: /^[0-9a-f]{64}$/i.test(String(txid || '')),
+    })
     return { txid }
   } catch (sendError) {
-    console.warn('DEBUG: Failed to broadcast transaction:', sendError.message)
-    console.warn('Waiting 5s then proceeding - wallet may have broadcast it')
+    console.warn('[DEBUG:broadcastTx] Failed to broadcast transaction:', sendError.message)
+    console.warn('[DEBUG:broadcastTx] Waiting 5s then proceeding - wallet may have broadcast it')
     await new Promise((resolve) => setTimeout(resolve, 5000))
     return { txid: null, success: true }
   }

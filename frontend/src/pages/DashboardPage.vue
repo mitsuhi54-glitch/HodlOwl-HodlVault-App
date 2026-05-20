@@ -231,52 +231,109 @@
               Set your target price and secure your Bitcoin Cash.
             </p>
           </div>
-          <div class="slideshow-container create-vault-header__slideshow">
+          <div
+            class="slideshow-container create-vault-header__slideshow"
+            :style="{
+              cursor: walletConnected ? 'pointer' : 'default',
+              position: 'relative',
+            }"
+            @click="walletConnected && openProfileModal()"
+          >
+            <!-- Disconnected state: silhouette avatar with cube-like theme -->
             <div
-              class="slide"
-              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+              v-if="!walletConnected"
+              class="create-vault-header__avatar-empty"
             >
-              <img
-                src="https://images.unsplash.com/photo-1639762681485-074b7f4ec651?auto=format&fit=crop&q=80&w=400"
-                style="
-                  width: 100%;
-                  height: 100%;
-                  object-fit: cover;
-                  opacity: 0.8;
-                  mix-blend-mode: screen;
-                "
-              />
+              <div class="tech-glow-lines" aria-hidden="true">
+                <div class="glow-line" style="left: 20%; animation-delay: 0s;" />
+                <div class="glow-line" style="left: 80%; animation-delay: 1.5s;" />
+              </div>
+              <i class="material-icons create-vault-header__avatar-icon">person_outline</i>
+              <span class="create-vault-header__avatar-label">Wallet not connected</span>
             </div>
-            <div
-              class="slide"
-              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1618044733300-9472054094ee?auto=format&fit=crop&q=80&w=400"
+            <!-- Connected state: slideshow background + profile overlay -->
+            <template v-else>
+              <div
+                class="slide"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1639762681485-074b7f4ec651?auto=format&fit=crop&q=80&w=400"
+                  style="
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    opacity: 0.8;
+                    mix-blend-mode: screen;
+                  "
+                />
+              </div>
+              <div
+                class="slide"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1618044733300-9472054094ee?auto=format&fit=crop&q=80&w=400"
+                  style="
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    opacity: 0.8;
+                    mix-blend-mode: screen;
+                  "
+                />
+              </div>
+              <div
+                class="slide"
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
+              >
+                <img
+                  src="https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=400"
+                  style="
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    opacity: 0.8;
+                    mix-blend-mode: screen;
+                  "
+                />
+              </div>
+              <!-- Profile name overlay -->
+              <div
+                v-if="profileName"
                 style="
-                  width: 100%;
-                  height: 100%;
-                  object-fit: cover;
-                  opacity: 0.8;
-                  mix-blend-mode: screen;
+                  position: absolute;
+                  bottom: 0;
+                  left: 0;
+                  right: 0;
+                  padding: 8px 12px;
+                  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+                  border-radius: 0 0 8px 8px;
                 "
-              />
-            </div>
-            <div
-              class="slide"
-              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1639762681057-408e52192e55?auto=format&fit=crop&q=80&w=400"
+              >
+                <span
+                  class="text-neon text-mono"
+                  style="font-size: 13px; font-weight: 700;"
+                >{{ profileName }}</span>
+              </div>
+              <!-- Prompt to set name when connected but no name -->
+              <div
+                v-else
                 style="
-                  width: 100%;
-                  height: 100%;
-                  object-fit: cover;
-                  opacity: 0.8;
-                  mix-blend-mode: screen;
+                  position: absolute;
+                  bottom: 0;
+                  left: 0;
+                  right: 0;
+                  padding: 8px 12px;
+                  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+                  border-radius: 0 0 8px 8px;
                 "
-              />
-            </div>
+              >
+                <span
+                  style="font-size: 11px; color: var(--color-text-dim);"
+                >Set profile name</span>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -866,7 +923,7 @@
                 :class="{ 'leaderboard-table__row--me': entry.walletAddress === walletAddress }"
               >
                 <span class="leaderboard-table__rank">{{ i + 1 }}</span>
-                <span class="leaderboard-table__wallet">{{ truncateAddress(entry.walletAddress) }}</span>
+                <span class="leaderboard-table__wallet">{{ entry.profileName || truncateAddress(entry.walletAddress) }}</span>
                 <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
                 <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
               </div>
@@ -895,13 +952,55 @@
                 :class="{ 'leaderboard-table__row--me': entry.walletAddress === walletAddress }"
               >
                 <span class="leaderboard-table__rank">{{ i + 1 }}</span>
-                <span class="leaderboard-table__wallet">{{ truncateAddress(entry.walletAddress) }}</span>
+                <span class="leaderboard-table__wallet">{{ entry.profileName || truncateAddress(entry.walletAddress) }}</span>
                 <span class="leaderboard-table__value">{{ entry.vaultCount }}</span>
                 <span class="leaderboard-table__value">{{ entry.totalBalanceBCH.toFixed(2) }}</span>
               </div>
             </div>
           </div>
         </div>
+      </q-card-section>
+    </q-card>
+  </q-dialog>
+
+  <!-- Profile Setup Modal -->
+  <q-dialog v-model="showProfileModal" persistent>
+    <q-card class="modal-content" style="max-width: 420px; width: 100%">
+      <q-card-section class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <i class="material-icons text-neon" style="font-size: 24px">person</i>
+          <h3 style="margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--font-heading);">
+            Profile Setup
+          </h3>
+        </div>
+        <q-btn flat dense round icon="close" v-close-popup />
+      </q-card-section>
+      <q-card-section class="modal-body">
+        <div style="display: grid; gap: 16px;">
+          <div class="field">
+            <label class="label-tiny">Display Name</label>
+            <q-input
+              v-model="profileNameInput"
+              placeholder="Enter your display name"
+              outlined
+              dense
+              dark
+              class="custom-input"
+              maxlength="30"
+              counter
+              @keyup.enter="saveProfile"
+            />
+            <div class="text-muted" style="font-size: 11px; margin-top: 4px;">
+              This name will appear on the leaderboard.
+            </div>
+          </div>
+        </div>
+      </q-card-section>
+      <q-card-section class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 24px 20px;">
+        <button class="btn btn--outline" style="padding: 8px 24px; font-size: 12px;" @click="showProfileModal = false">Cancel</button>
+        <button class="btn btn--primary" style="padding: 8px 24px; font-size: 12px;" :disabled="savingProfile" @click="saveProfile">
+          {{ savingProfile ? 'Saving...' : 'Save' }}
+        </button>
       </q-card-section>
     </q-card>
   </q-dialog>
@@ -919,7 +1018,7 @@ import { fetchOraclePrice, ORACLE_PUBKEY } from 'src/services/oracle'
 import { vaultStorage } from 'src/services/vault-storage'
 import { connectSSE, disconnectSSE } from 'src/services/sse.service'
 import { paytacaOptimizedWithdrawal } from 'src/services/paytaca-optimized-withdrawal'
-import { vaultApi } from 'src/services/api.service'
+import { vaultApi, preferencesApi } from 'src/services/api.service'
 import VaultsEmptyState from 'src/components/VaultsEmptyState.vue'
 
 export default defineComponent({
@@ -950,6 +1049,12 @@ export default defineComponent({
 
       // Wallet balance (internal use only)
       walletSats: 0,
+
+      // Profile
+      profileName: null,
+      profileNameInput: '',
+      showProfileModal: false,
+      savingProfile: false,
 
       // Hodler rank / leaderboard
       rankingTopLimit: 10,
@@ -1194,6 +1299,7 @@ export default defineComponent({
         this.loadVaults()
         this.fetchWalletBalance()
         this.fetchHodlerRank()
+        this.loadProfile()
         this.activityLogs = []
         disconnectSSE()
         connectSSE()
@@ -1206,6 +1312,7 @@ export default defineComponent({
         this.walletSats = 0
         this.userRanks = { lockedFund: null, vaultCreated: null }
         this.rankings = { lockedBCH: [], vaultCount: [] }
+        this.profileName = null
         this.activityLogs = []
         disconnectSSE()
       }
@@ -1219,6 +1326,7 @@ export default defineComponent({
     this.refreshPrice()
     this.fetchWalletBalance()
     this.fetchHodlerRank()
+    this.loadProfile()
     this.loadVaults()
     this.startBalancePolling()
     connectSSE()
@@ -1326,6 +1434,39 @@ export default defineComponent({
     truncateAddress(addr) {
       if (!addr) return ''
       return addr.slice(0, 6) + '...' + addr.slice(-4)
+    },
+
+    // ─── Profile ─────────────────────────────────────────────
+    async loadProfile() {
+      if (!this.walletConnected) return
+      try {
+        const resp = await preferencesApi.getPreferences()
+        if (resp?.profileName) {
+          this.profileName = resp.profileName
+        }
+      } catch (e) {
+        console.warn('[Profile] Failed to load:', e?.message || e)
+      }
+    },
+
+    openProfileModal() {
+      this.profileNameInput = this.profileName || ''
+      this.showProfileModal = true
+    },
+
+    async saveProfile() {
+      const name = (this.profileNameInput || '').trim()
+      if (!name) return
+      this.savingProfile = true
+      try {
+        await preferencesApi.updatePreferences({ profileName: name })
+        this.profileName = name
+        this.showProfileModal = false
+      } catch (e) {
+        console.warn('[Profile] Failed to save:', e?.message || e)
+      } finally {
+        this.savingProfile = false
+      }
     },
 
     // ─── Wallet Balance ──────────────────────────────────────
@@ -1539,7 +1680,16 @@ export default defineComponent({
       try {
         const wc = this.$walletConnect
         if (!wc || !wc.isConnected()) {
-          throw new Error('Please connect your wallet first')
+          console.warn('[deployContract] WalletConnect session check failed', {
+            wcExists: !!wc,
+            storeAddress: this.$store?.state?.wallet?.address,
+            sessionTopic: wc?.getSessionTopic?.(),
+          })
+          const { restoreSessionIfAny } = await import('src/boot/walletconnect')
+          await restoreSessionIfAny(this.$store)
+          if (!wc.isConnected()) {
+            throw new Error('Please connect your wallet first')
+          }
         }
 
         const ownerPkhHex = await recoverPublicKeyHash()
@@ -1733,12 +1883,30 @@ export default defineComponent({
 
       this.withdrawing = true
       try {
+        console.log('[DEBUG:Withdraw] Calling paytacaOptimizedWithdrawal...', {
+          ownerAddress,
+          networkPrefix: ownerAddress?.includes(':') ? ownerAddress.split(':')[0] : 'no-prefix',
+          contractAddress: this.manageVault.contractAddress,
+          vaultBalance: this.manageVault.balance,
+        })
+
         const result = await paytacaOptimizedWithdrawal(
           this.manageVault.contract,
           ownerAddress,
           this.oracleData.message_hex,
           this.oracleData.signature_hex,
         )
+
+        console.log('[DEBUG:Withdraw] Result from paytacaOptimizedWithdrawal:', {
+          success: result?.success,
+          hasTxHash: !!result?.txHash,
+          txHash: result?.txHash ? (typeof result.txHash === 'string' ? result.txHash.slice(0, 64) : result.txHash) : null,
+          txHashLength: result?.txHash?.length,
+          is64Hex: /^[0-9a-f]{64}$/i.test(String(result?.txHash || '')),
+          amountSatoshis: result?.amountSatoshis,
+          error: result?.error,
+          resultKeys: result ? Object.keys(result) : null,
+        })
 
         if (result?.success) {
           this.$q.notify({
@@ -1749,13 +1917,15 @@ export default defineComponent({
 
           try {
             const { activityLogApi } = await import('src/services/activity-log-api.js')
-            await activityLogApi.logWithdrawal({
+            const logPayload = {
               vaultId: this.manageVault._id || this.manageVault.id,
               vaultName: this.manageVault.name,
               contractAddress: this.manageVault.contractAddress,
               amountSatoshis: result.amountSatoshis || this.manageVault.balance || 0,
               txHash: result.txHash,
-            })
+            }
+            console.log('[DEBUG:Withdraw] Logging withdrawal activity:', logPayload)
+            await activityLogApi.logWithdrawal(logPayload)
           } catch {
             /* silent */
           }
@@ -1861,8 +2031,25 @@ export default defineComponent({
         .replace(/\b\w/g, (l) => l.toUpperCase())
     },
 
+    getExplorerNetwork() {
+      const addr = this.walletAddress || ''
+      if (!addr) return 'chipnet'
+      const prefix = addr.includes(':') ? addr.split(':')[0] : null
+      if (prefix === 'bitcoincash') return 'mainnet'
+      if (prefix === 'bchtest') return 'chipnet'
+      if (prefix === 'chipnet') return 'chipnet'
+      return 'chipnet'
+    },
+
     openTxExplorer(txHash) {
-      window.open(`https://chipnet.bch.ninja/tx/${txHash}`, '_blank')
+      const network = this.getExplorerNetwork()
+      const urls = {
+        mainnet: `https://explorer.bitcoin.com/bch/tx/${txHash}`,
+        chipnet: `https://chipnet.bch.ninja/tx/${txHash}`,
+      }
+      const url = urls[network] || urls.chipnet
+      console.log('[DEBUG:explorer] Opening tx:', { txHash: txHash?.slice(0, 16) + '...', network, url })
+      window.open(url, '_blank')
     },
 
     // ─── SSE Handlers ────────────────────────────────────────

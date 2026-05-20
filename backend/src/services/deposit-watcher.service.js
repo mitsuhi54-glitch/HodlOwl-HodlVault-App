@@ -83,9 +83,15 @@ export async function checkExpectedDeposits() {
         const depositTx = newUtxos[0]
         const depositAmount = newUtxos.reduce((sum, u) => sum + u.satoshis, 0)
 
-        console.log(
-          `[DepositWatcher] Deposit detected! ${contractAddress}: +${depositAmount} sats (tx: ${depositTx.txid})`,
-        )
+        console.log(`[DepositWatcher] Deposit detected! ${contractAddress}: +${depositAmount} sats`, {
+          txid: depositTx.txid,
+          txidLength: depositTx.txid?.length,
+          is64Hex: /^[0-9a-f]{64}$/i.test(String(depositTx.txid || '')),
+          vout: depositTx.vout,
+          satoshis: depositTx.satoshis,
+          newUtxoCount: newUtxos.length,
+          totalUtxoCount: currentUtxos.length,
+        })
 
         // Update vault balance in MongoDB (critical for auto-withdrawal to work)
         try {

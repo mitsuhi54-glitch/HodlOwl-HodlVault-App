@@ -125,16 +125,42 @@ async function executeAutoWithdrawal(vault, oracleData) {
     const oracleMessageBin = hexToBin(oracleData.messageHex)
     const oracleSigBin = hexToBin(oracleData.signatureHex)
 
-    const txHex = await contract.functions
+    console.log(`[AutoWithdraw:DEBUG] Sending transaction via CashScript .send()`, {
+      contractAddress: contract.address,
+      network: contract.provider?.network || 'unknown',
+      hostname: contract.provider?.hostname || contract.provider?.opts?.hostname || 'default',
+      ownerAddress,
+      ownerNetworkPrefix: ownerAddress?.includes(':') ? ownerAddress.split(':')[0] : 'none',
+      amount: amount.toString(),
+      utxoCount: utxos.length,
+      vaultWalletAddress: vault.walletAddress?.slice(0, 30) + '...',
+    })
+
+    const txResult = await contract.functions
       .spend(oracleMessageBin, oracleSigBin)
       .from(utxos) // Use all UTXOs as inputs (combines multiple deposits)
       .to([{ to: ownerAddress, amount: amount }])
       .withHardcodedFee(minerFee)
       .send()
 
-    // txHex is actually a transaction object from CashScript
-    const txid = txHex.txid || txHex
-    const txHexString = txHex.hex || txHex
+    console.log(`[AutoWithdraw:DEBUG] CashScript .send() raw result:`, {
+      type: typeof txResult,
+      isArray: Array.isArray(txResult),
+      keys: txResult && typeof txResult === 'object' ? Object.keys(txResult) : null,
+      txid: txResult?.txid || (typeof txResult === 'string' ? txResult.slice(0, 64) : 'N/A'),
+      txidLength: (txResult?.txid || (typeof txResult === 'string' ? txResult : '')).length,
+      hasHex: !!txResult?.hex,
+    })
+
+    // txResult is actually a transaction object from CashScript
+    const txid = txResult.txid || txResult
+    const txHexString = txResult.hex || txResult
+
+    console.log(`[AutoWithdraw:DEBUG] Extracted txid:`, {
+      txid: typeof txid === 'string' ? txid.slice(0, 64) : txid,
+      txidLength: txid?.length,
+      is64Hex: /^[0-9a-f]{64}$/i.test(String(txid || '')),
+    })
 
     console.log(
       `[AutoWithdraw] ✅ Withdrawal successful for vault ${vault.contractAddress}! TX: ${txid}`,
@@ -150,6 +176,11 @@ async function executeAutoWithdrawal(vault, oracleData) {
     console.error(
       `[AutoWithdraw] ❌ Withdrawal failed for vault ${vault.contractAddress}:`,
       error.message,
+      {
+        name: error.name,
+        code: error.code,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+      },
     )
     return {
       success: false,
@@ -226,26 +257,9 @@ export async function checkAndWithdraw() {
           console.warn('[AutoWithdraw] Failed to log activity:', logError.message)
         }
 
-        // Auto-delete vault after successful withdrawal (same as manual withdrawal)
-        try {
-          await logActivity({
-            walletAddress: vault.walletAddress,
-            activityType: 'VAULT_DELETED',
-            vaultId: vault._id,
-            vaultName: vault.name || 'Unnamed Vault',
-            contractAddress: vault.contractAddress,
-            details: {
-              reason: 'Auto-deleted after successful withdrawal',
-              autoWithdrawal: true,
-            },
-          })
-          await Vault.findByIdAndDelete(vault._id)
-          console.log(
-            `[AutoWithdraw] ✅ Vault ${vault.contractAddress} auto-deleted after withdrawal`,
-          )
-        } catch (deleteError) {
-          console.warn('[AutoWithdraw] Failed to auto-delete vault:', deleteError.message)
-        }
+        console.log(
+          `[AutoWithdraw] ✅ Vault ${vault.contractAddress} marked as withdrawn (kept in DB for stats)`,
+        )
 
         // Notify client in real-time via SSE
         sendEvent(vault.walletAddress, {

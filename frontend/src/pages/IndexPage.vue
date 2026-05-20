@@ -114,8 +114,13 @@ export default defineComponent({
     async fetchGlobalStats() {
       try {
         const response = await vaultApi.getGlobalStats()
+        console.log('[DEBUG] getGlobalStats response:', JSON.stringify(response))
         if (response?.stats) {
+          console.log('[DEBUG] stats object:', response.stats)
+          console.log('[DEBUG] totalLockedBCH raw:', response.stats.totalLockedBCH, 'type:', typeof response.stats.totalLockedBCH)
           this.stats = response.stats
+        } else {
+          console.warn('[DEBUG] No stats in response')
         }
       } catch (err) {
         console.warn('Failed to fetch global stats:', err)
@@ -149,15 +154,27 @@ export default defineComponent({
         const finalTarget = +targetVal;
         const isFloat = targetVal && targetVal.includes('.');
 
+        console.log('[DEBUG] counter targetVal:', targetVal, 'finalTarget:', finalTarget, 'isFloat:', isFloat)
+
         const duration = 1500;
         const frameRate = 30;
         const characters = '0123456789';
 
+        const getPrecision = (val) => {
+          if (val === 0) return 2;
+          if (Math.abs(val) >= 1) return 2;
+          if (Math.abs(val) >= 0.01) return 4;
+          if (Math.abs(val) >= 0.0001) return 6;
+          return 8;
+        };
+
         let startTime = null;
-        let originalText = isFloat ? finalTarget.toFixed(2) : Math.round(finalTarget).toString();
+        const precision = isFloat ? getPrecision(finalTarget) : 0;
+        let originalText = isFloat ? finalTarget.toFixed(precision) : Math.round(finalTarget).toString();
+        console.log('[DEBUG] originalText after toFixed:', originalText, 'value:', finalTarget, 'precision:', precision)
 
         if (finalTarget === 0) {
-          counter.innerText = isFloat ? '0.00' : '0';
+          counter.innerText = isFloat ? (0).toFixed(precision) : '0';
           return;
         }
 

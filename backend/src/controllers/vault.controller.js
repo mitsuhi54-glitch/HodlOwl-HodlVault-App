@@ -599,6 +599,7 @@ function mapLockedBCHRanking(entries) {
     totalBalance: entry.totalBalance,
     totalBalanceBCH: entry.totalBalance / 100000000,
     vaultCount: entry.vaultCount,
+    profileName: entry.profileName || null,
   }))
 }
 
@@ -609,6 +610,7 @@ function mapVaultCountRanking(entries) {
     vaultCount: entry.vaultCount,
     totalBalance: entry.totalBalance,
     totalBalanceBCH: entry.totalBalance / 100000000,
+    profileName: entry.profileName || null,
   }))
 }
 
@@ -641,6 +643,13 @@ async function getWalletRanks(walletAddress) {
   const lockedIdx = allByLocked.findIndex((e) => e._id === normalized)
   const vaultIdx = allByVaultCount.findIndex((e) => e._id === normalized)
 
+  const WalletPreferences = mongoose.model('WalletPreferences')
+  let profileName = null
+  try {
+    const prefs = await WalletPreferences.findByWalletAddress(normalized)
+    profileName = prefs?.profileName || null
+  } catch (_) { /* ignore */ }
+
   return {
     lockedFund:
       lockedIdx >= 0
@@ -649,6 +658,7 @@ async function getWalletRanks(walletAddress) {
             totalBalance: allByLocked[lockedIdx].totalBalance,
             totalBalanceBCH: allByLocked[lockedIdx].totalBalance / 100000000,
             vaultCount: allByLocked[lockedIdx].vaultCount,
+            profileName,
           }
         : null,
     vaultCreated:
@@ -658,6 +668,7 @@ async function getWalletRanks(walletAddress) {
             vaultCount: allByVaultCount[vaultIdx].vaultCount,
             totalBalance: allByVaultCount[vaultIdx].totalBalance,
             totalBalanceBCH: allByVaultCount[vaultIdx].totalBalance / 100000000,
+            profileName,
           }
         : null,
   }
@@ -696,11 +707,25 @@ export const getGlobalStats = async (req, res) => {
         { $sort: { totalBalance: -1, vaultCount: -1 } },
         { $limit: limit },
         {
+          $lookup: {
+            from: 'walletpreferences',
+            localField: '_id',
+            foreignField: 'walletAddress',
+            as: 'prefs',
+          },
+        },
+        {
+          $addFields: {
+            profileName: { $arrayElemAt: ['$prefs.profileName', 0] },
+          },
+        },
+        {
           $project: {
             _id: 0,
             walletAddress: '$_id',
             totalBalance: 1,
             vaultCount: 1,
+            profileName: 1,
           },
         },
       ]),
@@ -715,11 +740,25 @@ export const getGlobalStats = async (req, res) => {
         { $sort: { vaultCount: -1, totalBalance: -1 } },
         { $limit: limit },
         {
+          $lookup: {
+            from: 'walletpreferences',
+            localField: '_id',
+            foreignField: 'walletAddress',
+            as: 'prefs',
+          },
+        },
+        {
+          $addFields: {
+            profileName: { $arrayElemAt: ['$prefs.profileName', 0] },
+          },
+        },
+        {
           $project: {
             _id: 0,
             walletAddress: '$_id',
             vaultCount: 1,
             totalBalance: 1,
+            profileName: 1,
           },
         },
       ]),
@@ -731,6 +770,10 @@ export const getGlobalStats = async (req, res) => {
       withdrawnVaults: 0,
       totalVaults: 0,
     }
+
+    console.log('[DEBUG] getGlobalStats aggregation result:', JSON.stringify(data))
+    console.log('[DEBUG] totalBalance (satoshis):', data.totalBalance, 'totalLockedBCH:', (data.totalBalance || 0) / 100000000)
+    console.log('[DEBUG] withdrawnVaults count:', data.withdrawnVaults, 'totalTargetPriceReached:', (data.withdrawnVaults || 0))
 
     const walletQuery = typeof req.query.wallet === 'string' ? req.query.wallet.trim() : ''
     let userRanks = null

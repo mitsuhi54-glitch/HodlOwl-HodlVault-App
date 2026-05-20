@@ -1381,7 +1381,16 @@ export default defineComponent({
     },
 
     openTxExplorer(txHash) {
-      window.open(`https://chipnet.bch.ninja/tx/${txHash}`, '_blank')
+      const addr = this.connectedAddress || ''
+      const prefix = addr.includes(':') ? addr.split(':')[0] : null
+      const network = prefix === 'bitcoincash' ? 'mainnet' : 'chipnet'
+      const urls = {
+        mainnet: `https://explorer.bitcoin.com/bch/tx/${txHash}`,
+        chipnet: `https://chipnet.bch.ninja/tx/${txHash}`,
+      }
+      const url = urls[network] || urls.chipnet
+      console.log('[DEBUG:explorer] Opening tx:', { txHash: txHash?.slice(0, 16) + '...', network, url })
+      window.open(url, '_blank')
     },
   },
 

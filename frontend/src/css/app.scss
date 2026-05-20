@@ -467,6 +467,42 @@ footer, .q-footer {
   opacity: 1;
 }
 
+/* Empty (disconnected) state for profile avatar */
+.create-vault-header__avatar-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: radial-gradient(circle at center, rgba(0, 255, 136, 0.05) 0%, transparent 70%);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.create-vault-header__avatar-icon {
+  font-size: 40px !important;
+  color: var(--color-neon);
+  opacity: 0.4;
+  filter: drop-shadow(0 0 8px var(--color-neon-dim));
+  margin-bottom: 4px;
+}
+
+.create-vault-header__avatar-label {
+  font-size: 10px;
+  color: var(--color-text-dim);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+
+.tech-glow-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 @media (max-width: 768px) {
   .create-vault-header {
     flex-direction: column;

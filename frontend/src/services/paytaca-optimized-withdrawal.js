@@ -3,7 +3,6 @@
  * Addresses Paytaca-specific issues with covenant contracts
  */
 import { hexToBin } from '@bitauth/libauth'
-// import { hexToBin } from '@bitauth/libauth'
 
 export async function paytacaOptimizedWithdrawal(
   contract,
@@ -11,30 +10,31 @@ export async function paytacaOptimizedWithdrawal(
   oracleMessageHex,
   oracleSigHex,
 ) {
-  console.log('oraclemessage:', oracleMessageHex)
-  console.log('contract:', contract)
+  console.log('[DEBUG] paytacaOptimizedWithdrawal called', {
+    contractAddress: contract?.address,
+    ownerAddress,
+    networkPrefix: ownerAddress?.includes(':') ? ownerAddress.split(':')[0] : 'no-prefix',
+    oracleMessageHex: oracleMessageHex?.slice(0, 40) + '...',
+    oracleSigHex: oracleSigHex?.slice(0, 40) + '...',
+  })
   try {
     const minerFee = 1000n
     const utxos = await contract.getUtxos()
-    console.log('utxos:', utxos)
-    console.log('utxos length:', utxos.length)
+    console.log('[DEBUG] Contract UTXOs:', utxos.length, utxos.map(u => ({ txid: u.txid, vout: u.vout, satoshis: u.satoshis })))
 
-    // ✅ Validate: Check if there are any UTXOs
     if (!utxos || utxos.length === 0) {
-      console.error('❌ No UTXOs found - vault has no balance')
+      console.error('[DEBUG] No UTXOs found - vault has no balance')
       return {
         success: false,
         error: 'Vault has no balance to withdraw - it may have been auto-withdrawn already',
       }
     }
 
-    // ✅ Support multiple deposits: combine ALL UTXOs
     const totalSatoshis = utxos.reduce((sum, u) => sum + BigInt(u.satoshis), 0n)
-    console.log(`💰 Total balance from ${utxos.length} UTXO(s): ${totalSatoshis} sats`)
+    console.log(`[DEBUG] Total balance: ${totalSatoshis} sats from ${utxos.length} UTXO(s)`)
 
-    // ✅ Validate: Check if total balance is sufficient for fee
     if (totalSatoshis <= minerFee) {
-      console.error('❌ Total balance too low to cover miner fee')
+      console.error('[DEBUG] Total balance too low to cover miner fee')
       return {
         success: false,
         error: `Total balance (${totalSatoshis} sats) is too low to cover miner fee (${minerFee} sats)`,
@@ -44,29 +44,47 @@ export async function paytacaOptimizedWithdrawal(
     const amount = totalSatoshis - minerFee
     const oracleSigBin = hexToBin(oracleSigHex)
 
-    // ✅ Build transaction with ALL UTXOs as inputs (combines multiple deposits)
-    const txHex = await contract.functions
+    console.log('[DEBUG] Broadcasting transaction via CashScript .send()...', {
+      network: contract.provider?.network || 'unknown',
+      hostname: contract.provider?.hostname || contract.provider?.opts?.hostname || 'default',
+      functionCall: 'spend(oracleMessage, oracleSig).from(utxos).to(ownerAddress).withHardcodedFee(fee).send()',
+      amount: amount.toString(),
+      ownerAddress,
+      utxoCount: utxos.length,
+    })
+
+    const txResult = await contract.functions
       .spend(hexToBin(oracleMessageHex), oracleSigBin)
       .from(utxos)
       .to([{ to: ownerAddress, amount: amount }])
       .withHardcodedFee(minerFee)
       .send()
 
-    console.log('Built transaction hex:', txHex)
+    console.log('[DEBUG] CashScript .send() raw result:', {
+      type: typeof txResult,
+      isArray: Array.isArray(txResult),
+      keys: txResult && typeof txResult === 'object' ? Object.keys(txResult) : null,
+      txid: txResult?.txid || (typeof txResult === 'string' ? txResult.slice(0, 64) : 'N/A'),
+      txidLength: (txResult?.txid || (typeof txResult === 'string' ? txResult : '')).length,
+      hex: txResult?.hex ? (typeof txResult.hex === 'string' ? txResult.hex.slice(0, 40) + '...' : 'non-string') : null,
+    })
 
-    // Extract txHash from CashScript response (could be string or object)
-    const txHash = txHex.txid || txHex
+    const txHash = txResult.txid || txResult
+    console.log('[DEBUG] Extracted txHash:', { txHash: typeof txHash === 'string' ? txHash.slice(0, 64) : txHash, txHashLength: txHash?.length, is64Hex: /^[0-9a-f]{64}$/i.test(String(txHash)) })
 
-    // ✅ Return success with transaction details
     return {
       success: true,
-      txHex,
+      txHex: txResult,
       txHash,
       amountSatoshis: Number(amount),
     }
   } catch (error) {
-    console.error('Error building transaction:', error)
-    // ✅ Return failure with error message
+    console.error('[DEBUG] CashScript .send() threw an error:', {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+    })
     return {
       success: false,
       error: error.message || 'Transaction failed',

@@ -10,7 +10,7 @@ const activityLogSchema = new mongoose.Schema({
   activityType: {
     type: String,
     required: true,
-    enum: ['VAULT_CREATED', 'DEPOSIT', 'WITHDRAWAL', 'PRICE_TARGET_REACHED', 'VAULT_DELETED'],
+    enum: ['VAULT_CREATED', 'DEPOSIT', 'WITHDRAWAL', 'PRICE_TARGET_REACHED', 'VAULT_DELETED', 'AUTO_WITHDRAWAL_ENABLED', 'AUTO_WITHDRAWAL_DISABLED'],
   },
   vaultId: {
     type: mongoose.Schema.Types.ObjectId,

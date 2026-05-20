@@ -81,6 +81,13 @@ export async function getAddressUtxos(address) {
     try {
       const provider = getQueryProvider(network, hostname)
       const utxos = await provider.getUtxos(address)
+      console.log('[DEBUG:utxos] getAddressUtxos raw result:', utxos.map(u => ({
+        txid: u.txid,
+        txidLength: u.txid?.length,
+        txidIs64Hex: /^[0-9a-f]{64}$/i.test(String(u.txid || '')),
+        vout: u.vout,
+        satoshis: u.satoshis,
+      })))
       return utxos.map((u) => ({
         txid: u.txid,
         vout: u.vout,

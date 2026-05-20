@@ -89,6 +89,7 @@ vaultSchema.statics.findByWalletAddress = function (walletAddress) {
 vaultSchema.statics.checkDuplicate = function (walletAddress, priceTargetCents) {
   return this.findOne({
     walletAddress: walletAddress.toLowerCase(),
+    status: { $ne: 'withdrawn' },
     priceTargetCents: { $gte: priceTargetCents - 0.01, $lte: priceTargetCents + 0.01 },
   })
 }

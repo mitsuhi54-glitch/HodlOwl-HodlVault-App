@@ -390,7 +390,13 @@ export default defineComponent({
     chipnetExplorerAddressUrl() {
       if (!this.vault || !this.vault.contractAddress) return ''
       const addr = encodeURIComponent(this.vault.contractAddress)
-      return `https://chipnet.bch.ninja/address/${addr}`
+      const prefix = this.vault.contractAddress.includes(':') ? this.vault.contractAddress.split(':')[0] : null
+      const network = prefix === 'bitcoincash' ? 'mainnet' : 'chipnet'
+      const urls = {
+        mainnet: `https://explorer.bitcoin.com/bch/address/${addr}`,
+        chipnet: `https://chipnet.bch.ninja/address/${addr}`,
+      }
+      return urls[network] || urls.chipnet
     },
   },
 
@@ -768,15 +774,33 @@ export default defineComponent({
         })
         return
       }
-      console.log(this.vault)
+      console.log('[DEBUG:Withdraw] Vault data:', this.vault?.contractAddress, { ownerAddress, prefix: ownerAddress?.includes(':') ? ownerAddress.split(':')[0] : 'none', balance: this.vault?.balance })
       this.withdrawing = true
       try {
+        console.log('[DEBUG:Withdraw] Calling paytacaOptimizedWithdrawal...', {
+          ownerAddress,
+          networkPrefix: ownerAddress?.includes(':') ? ownerAddress.split(':')[0] : 'no-prefix',
+          contractAddress: this.vault.contractAddress,
+          vaultBalance: this.vault.balance,
+        })
+
         const result = await paytacaOptimizedWithdrawal(
           this.vault.contract,
           ownerAddress,
           this.oracleData.message_hex,
           this.oracleData.signature_hex,
         )
+
+        console.log('[DEBUG:Withdraw] Result from paytacaOptimizedWithdrawal:', {
+          success: result?.success,
+          hasTxHash: !!result?.txHash,
+          txHash: result?.txHash ? (typeof result.txHash === 'string' ? result.txHash.slice(0, 64) : result.txHash) : null,
+          txHashLength: result?.txHash?.length,
+          is64Hex: /^[0-9a-f]{64}$/i.test(String(result?.txHash || '')),
+          amountSatoshis: result?.amountSatoshis,
+          error: result?.error,
+          resultKeys: result ? Object.keys(result) : null,
+        })
 
         // ✅ Check result before showing success message
         if (result?.success) {
@@ -789,16 +813,18 @@ export default defineComponent({
           // ✅ Log withdrawal activity
           try {
             const { activityLogApi } = await import('src/services/activity-log-api.js')
-            await activityLogApi.logWithdrawal({
+            const logPayload = {
               vaultId: this.vault._id,
               vaultName: this.vault.name || 'Unnamed Vault',
               contractAddress: this.vault.contractAddress,
               amountSatoshis: result.amountSatoshis || this.vault.balance || 0,
               txHash: result.txHash,
-            })
-            console.log('✅ Withdrawal activity logged')
+            }
+            console.log('[DEBUG:Withdraw] Logging withdrawal activity:', logPayload)
+            await activityLogApi.logWithdrawal(logPayload)
+            console.log('[DEBUG:Withdraw] ✅ Withdrawal activity logged')
           } catch (logError) {
-            console.warn('⚠️ Failed to log withdrawal activity:', logError)
+            console.warn('[DEBUG:Withdraw] ⚠️ Failed to log withdrawal activity:', logError)
           }
 
           // ✅ Delete vault from backend and localStorage

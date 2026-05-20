@@ -34,6 +34,7 @@ export const getWalletPreferences = async (req, res) => {
       oneSignalPlayerId: preferences.oneSignalPlayerId,
       email: preferences.email,
       emailVerified: preferences.emailVerified || false,
+      profileName: preferences.profileName || null,
       preferences: preferences.preferences,
       createdAt: preferences.createdAt,
       updatedAt: preferences.updatedAt,
@@ -68,6 +69,7 @@ export const updateWalletPreferences = async (req, res) => {
     const response = {
       message: 'Wallet preferences updated successfully',
       walletAddress: updatedPreferences.walletAddress,
+      profileName: updatedPreferences.profileName || null,
       preferences: updatedPreferences.preferences,
       updatedAt: updatedPreferences.updatedAt,
     }

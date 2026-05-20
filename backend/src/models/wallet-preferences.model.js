@@ -30,6 +30,12 @@ const walletPreferencesSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    profileName: {
+      type: String,
+      default: null,
+      trim: true,
+      maxlength: 30,
+    },
     preferences: {
       autoWithdrawal: {
         type: Boolean,
@@ -100,6 +106,11 @@ walletPreferencesSchema.statics.updatePreferences = async function (walletAddres
       updateData[`preferences.${field}`] = newPreferences[field]
     }
   })
+
+  // Top-level fields
+  if (newPreferences.profileName !== undefined) {
+    updateData.profileName = newPreferences.profileName || null
+  }
 
   const preferences = await this.findOneAndUpdate(
     { walletAddress: normalizedAddress },

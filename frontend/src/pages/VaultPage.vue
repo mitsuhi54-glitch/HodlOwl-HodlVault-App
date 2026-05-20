@@ -413,7 +413,13 @@ export default defineComponent({
     chipnetExplorerAddressUrl() {
       if (!this.vault || !this.vault.contractAddress) return ''
       const addr = encodeURIComponent(this.vault.contractAddress)
-      return `https://chipnet.bch.ninja/address/${addr}`
+      const prefix = this.vault.contractAddress.includes(':') ? this.vault.contractAddress.split(':')[0] : null
+      const network = prefix === 'bitcoincash' ? 'mainnet' : 'chipnet'
+      const urls = {
+        mainnet: `https://explorer.bitcoin.com/bch/address/${addr}`,
+        chipnet: `https://chipnet.bch.ninja/address/${addr}`,
+      }
+      return urls[network] || urls.chipnet
     },
   },
 

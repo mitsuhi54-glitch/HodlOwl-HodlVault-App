@@ -743,16 +743,19 @@ async function syncSessionToStore(store, client, session) {
 
 export async function restoreSessionIfAny(store) {
   if (!store) return
+  let foundSession = false
   try {
     const client = await getSignClient(store)
     const sessions = client.session.getAll()
     const bchSession = sessions.find((s) => s.namespaces?.bch?.accounts?.length)
+    foundSession = !!bchSession
 
     const disconnectStale = async () => {
       if (bchSession) {
         try { await client.disconnect({ topic: bchSession.topic }) } catch { /* ignore */ }
       }
       currentSession = null
+      store.commit('wallet/CLEAR_WALLET')
     }
 
     if (bchSession && bchSession.expiry * 1000 > Date.now()) {
@@ -775,10 +778,13 @@ export async function restoreSessionIfAny(store) {
     }
   } catch (e) {
     console.debug('WalletConnect session restore failed:', e)
+    if (foundSession) {
+      store.commit('wallet/CLEAR_WALLET')
+    }
   }
 }
 
-export default boot(({ app }) => {
+export default boot(async ({ app }) => {
   const store = app.config.globalProperties.$store
   if (!store) {
     console.warn('WalletConnect boot: Vuex store not available yet')
@@ -788,5 +794,5 @@ export default boot(({ app }) => {
   app.config.globalProperties.$walletConnect = wc
   app.provide('walletConnect', wc)
   // Attempt to restore any existing valid session (will auto-clean stale ones)
-  restoreSessionIfAny(store)
+  await restoreSessionIfAny(store)
 })
