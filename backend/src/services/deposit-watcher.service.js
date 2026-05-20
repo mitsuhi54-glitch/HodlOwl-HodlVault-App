@@ -1,6 +1,7 @@
 import { getAddressBalance, getAddressUtxos } from '../utils/blockchain.js'
 import { logActivity } from './activity-log.service.js'
 import { Vault } from '../models/vault.model.js'
+import { subscribeAddress, unsubscribeAddress, onDepositNotification, isSubscriberConnected } from './electrum-subscriber.js'
 
 // Store expected deposits: Map<contractAddress, depositInfo>
 const expectedDeposits = new Map()
@@ -20,12 +21,15 @@ export function watchForDeposit(depositInfo) {
   expectedDeposits.set(contractAddress, {
     ...depositInfo,
     initialBalance: 0,
-    initialUtxos: [], // Store initial UTXOs to detect new ones
+    initialUtxos: [],
     startTime: Date.now(),
-    expiresAt: Date.now() + 120000, // 2 minute timeout
+    expiresAt: Date.now() + 3600000, // 1 hour timeout (plenty of time for user to deposit)
   })
 
-  console.log(`[DepositWatcher] Watching for deposit to ${contractAddress}`)
+  console.log(`[DepositWatcher] Watching for deposit to ${contractAddress} (no expiration for 1h)`)
+
+  // Subscribe via Electrum WebSocket for push notifications
+  subscribeAddress(contractAddress)
 }
 
 /**
@@ -36,8 +40,15 @@ export function stopWatching(contractAddress) {
   if (expectedDeposits.has(contractAddress)) {
     expectedDeposits.delete(contractAddress)
     console.log(`[DepositWatcher] Stopped watching ${contractAddress}`)
+    // Unsubscribe from Electrum
+    unsubscribeAddress(contractAddress)
   }
 }
+
+// When Electrum subscriber receives a scripthash notification, run a deposit check
+onDepositNotification(() => {
+  checkExpectedDeposits()
+})
 
 /**
  * Check all expected deposits

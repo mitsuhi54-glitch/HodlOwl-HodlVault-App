@@ -455,9 +455,9 @@ export async function spendVault(
           return { txid: null, success: true, broadcastedByWallet: true }
         }
 
-        // Final fallback - wait and proceed
-        console.warn('No transaction data received, waiting and proceeding...')
-        await new Promise((resolve) => setTimeout(resolve, 5000))
+        // Final fallback - short wait then proceed
+        console.warn('No transaction data received, proceeding...')
+        await new Promise((resolve) => setTimeout(resolve, 2000))
         return { txid: null, success: true }
       } catch (walletError) {
         console.error('DEBUG: WalletConnect signing failed:', {
@@ -499,8 +499,8 @@ async function broadcastTransaction(signedHex, provider) {
     return { txid }
   } catch (sendError) {
     console.warn('[DEBUG:broadcastTx] Failed to broadcast transaction:', sendError.message)
-    console.warn('[DEBUG:broadcastTx] Waiting 5s then proceeding - wallet may have broadcast it')
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+    console.warn('[DEBUG:broadcastTx] Proceeding - wallet may have broadcast it')
+    await new Promise((resolve) => setTimeout(resolve, 2000))
     return { txid: null, success: true }
   }
 }
@@ -588,8 +588,8 @@ export async function depositToVault(toAddress, amountSats, walletConnectRequest
     null
 
   if (!signedHex || typeof signedHex !== 'string') {
-    console.warn('Wallet did not return a signed transaction, waiting 5s then proceeding')
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+    console.warn('Wallet did not return a signed transaction, proceeding')
+    await new Promise((resolve) => setTimeout(resolve, 2000))
     return { txid: null, raw: result, success: true }
   }
   const network = inferNetworkFromAddress(toAddress)
@@ -599,8 +599,8 @@ export async function depositToVault(toAddress, amountSats, walletConnectRequest
   try {
     txid = await provider.sendRawTransaction(signedHex)
   } catch (sendError) {
-    console.warn('Failed to broadcast transaction, waiting 5s then proceeding:', sendError.message)
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+    console.warn('Failed to broadcast transaction, proceeding:', sendError.message)
+    await new Promise((resolve) => setTimeout(resolve, 2000))
     return { txid: null, raw: result, success: true }
   }
 

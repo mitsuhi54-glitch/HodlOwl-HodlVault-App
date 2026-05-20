@@ -63,7 +63,7 @@
             &copy; 2026 HODLVAULT WEB APP
           </div>
           <div class="footer-right">
-            <span class="status-item">SYSTEM VERSION: v2.3.0</span>
+            <span class="status-item">SYSTEM VERSION: v4.0.1</span>
             <span class="status-item" :class="networkLabel === 'CHIPNET' ? 'text-neon' : (networkLabel === 'MAINNET' ? 'text-green' : 'text-grey')">NETWORK: {{ networkLabel }}</span>
           </div>
         </div>

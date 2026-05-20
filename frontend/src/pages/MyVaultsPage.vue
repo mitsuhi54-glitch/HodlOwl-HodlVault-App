@@ -947,18 +947,21 @@ export default defineComponent({
           this.notificationPermissionDenied = false
         }
 
-        console.log(`[NotifDebug:page] Checking OneSignal subscription status`)
-        const subscribed = await isNotificationSubscribed()
-        console.log(`[NotifDebug:page] isNotificationSubscribed() = ${subscribed}`)
-        this.notificationsEnabled = subscribed
-
         if (this.connectedAddress) {
           console.log(`[NotifDebug:page] Fetching backend preferences`)
           const prefs = await oneSignalApi.getPreferences()
           console.log(`[NotifDebug:page] Backend prefs | notifications=${prefs?.preferences?.notifications} | hasPlayerId=${!!prefs?.oneSignalPlayerId} | email=${!!prefs?.email} | emailNotifications=${prefs?.preferences?.emailNotifications}`)
-          if (prefs?.preferences?.notifications === false) {
-            console.log(`[NotifDebug:page] Backend says notifications disabled — overriding toggle to OFF`)
+          
+          // Prioritize backend preference as source of truth
+          if (prefs?.preferences?.notifications === true) {
+            this.notificationsEnabled = true
+          } else if (prefs?.preferences?.notifications === false) {
             this.notificationsEnabled = false
+          } else {
+            // No backend preference yet, use OneSignal subscription state
+            const subscribed = await isNotificationSubscribed()
+            console.log(`[NotifDebug:page] isNotificationSubscribed() = ${subscribed}`)
+            this.notificationsEnabled = subscribed
           }
           // Email notification state
           this.savedEmail = prefs?.email || null
@@ -1093,7 +1096,7 @@ export default defineComponent({
         }
 
         // Process vaults with blockchain balance refresh
-        this.vaults = await Promise.all(
+        this.vaults = (await Promise.all(
           storedVaults.map(async (vault) => {
             if (!vault.priceTarget && vault.priceTargetCents) {
               vault.priceTarget = vault.priceTargetCents / 100
@@ -1121,7 +1124,7 @@ export default defineComponent({
               }
             }
           }),
-        )
+        )).filter((v) => v.status !== 'withdrawn' && v.balance > 0)
 
         console.log('Loaded vaults with refreshed balances:', this.vaults)
       } catch (error) {
@@ -1155,11 +1158,19 @@ export default defineComponent({
 
       console.log('🔄 Silently refreshing vault balances...')
 
+      const toRemove = []
+
       for (let i = 0; i < this.vaults.length; i++) {
         const vault = this.vaults[i]
         try {
           const { getAddressBalance } = await import('src/services/blockchain')
           const newBalance = Number(await getAddressBalance(vault.contractAddress))
+
+          // Remove vaults that have been emptied (auto-withdrawn or manually withdrawn)
+          if (newBalance <= 0 || vault.status === 'withdrawn') {
+            toRemove.push(i)
+            continue
+          }
 
           // Only update if balance changed to avoid unnecessary re-renders
           if (vault.balance !== newBalance) {
@@ -1174,7 +1185,13 @@ export default defineComponent({
         }
       }
 
-      console.log('✅ Silent balance refresh complete')
+      // Remove emptied vaults in reverse order to maintain correct indices
+      for (let i = toRemove.length - 1; i >= 0; i--) {
+        const removed = this.vaults.splice(toRemove[i], 1)[0]
+        console.log(`Removed emptied vault from list: ${removed.contractAddress}`)
+      }
+
+      console.log(`✅ Silent balance refresh complete (${toRemove.length} removed)`)    
     },
 
     async fetchCurrentPrice() {

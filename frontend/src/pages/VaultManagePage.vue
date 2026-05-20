@@ -400,8 +400,9 @@ export default defineComponent({
     },
   },
 
-  mounted() {
-    this.loadSelectedVault()
+  async mounted() {
+    // Await vault load to prevent race conditions with SSE events
+    await this.loadSelectedVault()
     this.refreshPrice()
 
     // ✅ Connect to real-time SSE updates
@@ -412,6 +413,9 @@ export default defineComponent({
 
     // Listen for deposit confirmation events (real-time balance updates)
     window.addEventListener('deposit-confirmed', this.handleDepositConfirmed)
+
+    // Start balance polling as SSE fallback
+    this.startSilentBalancePolling()
   },
 
   beforeUnmount() {
@@ -423,6 +427,16 @@ export default defineComponent({
     disconnectSSE()
     window.removeEventListener('vault-withdrawn', this.handleVaultWithdrawn)
     window.removeEventListener('deposit-confirmed', this.handleDepositConfirmed)
+  },
+
+  watch: {
+    walletAddress(newVal, oldVal) {
+      if (newVal && newVal !== oldVal) {
+        console.log('[VaultManage] Wallet address changed — reconnecting SSE')
+        disconnectSSE()
+        connectSSE()
+      }
+    },
   },
 
   methods: {
@@ -647,6 +661,14 @@ export default defineComponent({
       }
     },
 
+    startSilentBalancePolling() {
+      // Poll every 15 seconds as SSE fallback
+      if (this.balanceInterval) clearInterval(this.balanceInterval)
+      this.balanceInterval = setInterval(() => {
+        this.refreshVaultBalanceSilent()
+      }, 15000)
+    },
+
     stopBalancePolling() {
       if (this.balanceInterval) {
         clearInterval(this.balanceInterval)
@@ -659,16 +681,21 @@ export default defineComponent({
      * ✅ SSE-Only: Tell backend to watch/unwatch for deposits
      */
     async toggleQRCode() {
-      this.showQRCode = !this.showQRCode
-
-      if (this.showQRCode) {
-        // User wants to deposit - tell backend to watch
+      if (!this.showQRCode) {
+        // User wants to deposit - show QR first, then tell backend
+        this.showQRCode = true
         console.log('👁️ QR code shown - telling backend to watch for deposit')
-        await this.startDepositWatch()
+        const watching = await this.startDepositWatch()
+        if (!watching) {
+          // Backend watch failed - hide QR and let user know
+          console.warn('👁️ Backend watch failed — hiding QR')
+          this.showQRCode = false
+        }
       } else {
         // User closed QR - tell backend to stop watching
         console.log('🛑 QR code hidden - stopping backend watch')
         await this.stopDepositWatch()
+        this.showQRCode = false
       }
     },
 
@@ -692,13 +719,15 @@ export default defineComponent({
           message: 'Send funds to the address above. You will be notified when confirmed.',
           timeout: 5000,
         })
+        return true
       } catch (error) {
         console.error('Failed to start deposit watch:', error)
         this.$q.notify({
-          type: 'info',
-          message: 'Send funds to the vault address. This page will update automatically.',
+          type: 'warning',
+          message: 'Realtime deposit watching unavailable, but you can still send funds. Balance will update on refresh.',
           timeout: 10000,
         })
+        return false
       }
     },
 

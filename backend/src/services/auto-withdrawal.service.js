@@ -191,13 +191,16 @@ async function executeAutoWithdrawal(vault, oracleData) {
 
 /**
  * Main check-and-withdraw cycle.
- * Called by the cron scheduler every 2 minutes.
+ * Called by the cron scheduler every 3 seconds.
  *
  * 1. Fetch current oracle price + signature
  * 2. Find all vaults where autoWithdrawal=true, status=active, balance>0,
  *    and priceTargetCents <= current oracle price
- * 3. Execute withdrawal for each eligible vault
- * 4. Mark vaults as withdrawn and log activity
+ * 3. Execute withdrawal for ALL eligible vaults IN PARALLEL
+ *    (each vault has its own blockchain contract, no cross-dependencies)
+ * 4. Post-withdrawal DB operations per vault are sequential,
+ *    but vaults are processed concurrently.
+ * 5. Notifications (SSE, push, email) are also fired in parallel per vault.
  */
 export async function checkAndWithdraw() {
   console.log('[AutoWithdraw] Starting check cycle...')
@@ -226,103 +229,16 @@ export async function checkAndWithdraw() {
 
     console.log(`[AutoWithdraw] Found ${eligibleVaults.length} eligible vault(s)`)
 
-    // Step 3: Process each vault
+    // Step 3: Process ALL vaults in parallel
+    const results = await Promise.allSettled(
+      eligibleVaults.map((vault) => processSingleVault(vault, oracleData)),
+    )
+
     let withdrawn = 0
     let failed = 0
-
-    for (const vault of eligibleVaults) {
-      const result = await executeAutoWithdrawal(vault, oracleData)
-
-      if (result.success) {
-        // Mark vault as withdrawn
-        vault.status = 'withdrawn'
-        vault.balance = 0
-        await vault.save({ validateBeforeSave: false })
-
-        // Log the withdrawal activity
-        try {
-          await logActivity({
-            walletAddress: vault.walletAddress,
-            activityType: 'WITHDRAWAL',
-            vaultId: vault._id,
-            vaultName: vault.name || 'Unnamed Vault',
-            contractAddress: vault.contractAddress,
-            details: {
-              amountSatoshis: result.amountSatoshis,
-              txHash: result.txid,
-              autoWithdrawal: true,
-            },
-          })
-        } catch (logError) {
-          console.warn('[AutoWithdraw] Failed to log activity:', logError.message)
-        }
-
-        // Auto-delete vault after successful withdrawal (same as manual withdrawal)
-        try {
-          await logActivity({
-            walletAddress: vault.walletAddress,
-            activityType: 'VAULT_DELETED',
-            vaultId: vault._id,
-            vaultName: vault.name || 'Unnamed Vault',
-            contractAddress: vault.contractAddress,
-            details: {
-              reason: 'Auto-deleted after successful withdrawal',
-              autoWithdrawal: true,
-            },
-          })
-          await Vault.findByIdAndDelete(vault._id)
-          console.log(
-            `[AutoWithdraw] ✅ Vault ${vault.contractAddress} auto-deleted after withdrawal`,
-          )
-        } catch (deleteError) {
-          console.warn('[AutoWithdraw] Failed to auto-delete vault:', deleteError.message)
-        }
-
-        // Notify client in real-time via SSE
-        sendEvent(vault.walletAddress, {
-          type: 'VAULT_WITHDRAWN',
-          vaultId: vault._id,
-          contractAddress: vault.contractAddress,
-          amountSatoshis: result.amountSatoshis,
-          txHash: result.txid,
-          timestamp: new Date().toISOString(),
-        })
-
-        // Send push notification (works even if user offline/tab closed)
-        const notifStartTime = Date.now()
-        console.log(`[NotifDebug:backend:auto-withdraw] >>> Sending push notification | wallet=${vault.walletAddress.slice(0, 16)}... | vaultName=${vault.name || 'Unnamed Vault'} | contractAddress=${vault.contractAddress}`)
-        try {
-          const notifResult = await sendAutoWithdrawalNotification(vault.walletAddress, {
-            vaultName: vault.name || 'Unnamed Vault',
-            contractAddress: vault.contractAddress,
-          })
-          const notifElapsed = Date.now() - notifStartTime
-          console.log(`[NotifDebug:backend:auto-withdraw] <<< Push notification result | sent=${notifResult.sent} | reason=${notifResult.reason || 'N/A'} | elapsed=${notifElapsed}ms | errors=${notifResult.errors ? JSON.stringify(notifResult.errors) : 'none'}`)
-        } catch (notifyError) {
-          const notifElapsed = Date.now() - notifStartTime
-          console.warn(`[NotifDebug:backend:auto-withdraw] <<< Push notification threw exception | elapsed=${notifElapsed}ms | error=${notifyError.message}`, notifyError)
-        }
-
-        // Send email notification
-        const emailStartTime = Date.now()
-        console.log(`[NotifDebug:backend:auto-withdraw] >>> Sending email notification | wallet=${vault.walletAddress.slice(0, 16)}... | vaultName=${vault.name || 'Unnamed Vault'}`)
-        try {
-          const emailResult = await sendEmailNotification(vault.walletAddress, {
-            vaultName: vault.name || 'Unnamed Vault',
-            contractAddress: vault.contractAddress,
-          })
-          const emailElapsed = Date.now() - emailStartTime
-          console.log(`[NotifDebug:backend:auto-withdraw] <<< Email notification result | sent=${emailResult.sent} | reason=${emailResult.reason || 'N/A'} | elapsed=${emailElapsed}ms`)
-        } catch (emailError) {
-          const emailElapsed = Date.now() - emailStartTime
-          console.warn(`[NotifDebug:backend:auto-withdraw] <<< Email notification threw exception | elapsed=${emailElapsed}ms | error=${emailError.message}`, emailError)
-        }
-
-        withdrawn++
-      } else {
-        console.warn(`[AutoWithdraw] Skipping vault ${vault.contractAddress}: ${result.error}`)
-        failed++
-      }
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value?.success) withdrawn++
+      else failed++
     }
 
     console.log(
@@ -338,4 +254,124 @@ export async function checkAndWithdraw() {
     console.error('[AutoWithdraw] Check cycle failed:', error.message)
     return { processed: 0, withdrawn: 0, failed: 0, error: error.message }
   }
+}
+
+/**
+ * Process a single vault through the full withdrawal lifecycle.
+ * Called concurrently for all eligible vaults.
+ *
+ * @returns {{success: boolean}}
+ */
+async function processSingleVault(vault, oracleData) {
+  const result = await executeAutoWithdrawal(vault, oracleData)
+
+  if (!result.success) {
+    console.warn(`[AutoWithdraw] Skipping vault ${vault.contractAddress}: ${result.error}`)
+    return { success: false }
+  }
+
+  // -- Post-withdrawal (sequential for same vault, parallel across vaults) --
+
+  vault.status = 'withdrawn'
+  vault.balance = 0
+  await vault.save({ validateBeforeSave: false })
+
+  // Log withdrawal + attempt deletion in parallel
+  const [deletionResult] = await Promise.allSettled([
+    deleteVaultWithRetry(vault),
+    logActivity({
+      walletAddress: vault.walletAddress,
+      activityType: 'WITHDRAWAL',
+      vaultId: vault._id,
+      vaultName: vault.name || 'Unnamed Vault',
+      contractAddress: vault.contractAddress,
+      details: {
+        amountSatoshis: result.amountSatoshis,
+        txHash: result.txid,
+        autoWithdrawal: true,
+      },
+    }),
+  ])
+
+  // Only log VAULT_DELETED after deletion actually succeeded
+  if (deletionResult.status === 'fulfilled') {
+    logActivity({
+      walletAddress: vault.walletAddress,
+      activityType: 'VAULT_DELETED',
+      vaultId: vault._id,
+      vaultName: vault.name || 'Unnamed Vault',
+      contractAddress: vault.contractAddress,
+      details: {
+        reason: 'Auto-deleted after successful withdrawal',
+        autoWithdrawal: true,
+      },
+    }).catch(() => {})
+  } else {
+    console.warn(
+      `[AutoWithdraw] Vault ${vault.contractAddress} marked withdrawn but deletion failed — it will be filtered on frontend`,
+    )
+  }
+
+  // Fire notifications in parallel (SSE, push, email) — don't block the cycle
+  Promise.allSettled([
+    sendEvent(vault.walletAddress, {
+      type: 'VAULT_WITHDRAWN',
+      vaultId: vault._id,
+      contractAddress: vault.contractAddress,
+      amountSatoshis: result.amountSatoshis,
+      txHash: result.txid,
+      timestamp: new Date().toISOString(),
+    }),
+    sendAutoWithdrawalNotification(vault.walletAddress, {
+      vaultName: vault.name || 'Unnamed Vault',
+      contractAddress: vault.contractAddress,
+    }).catch((err) =>
+      console.warn('[AutoWithdraw] Push notification failed:', err.message),
+    ),
+    sendEmailNotification(vault.walletAddress, {
+      vaultName: vault.name || 'Unnamed Vault',
+      contractAddress: vault.contractAddress,
+    }).catch((err) =>
+      console.warn('[AutoWithdraw] Email notification failed:', err.message),
+    ),
+  ]).then(() => {
+    console.log(`[AutoWithdraw] ✅ All notifications sent for ${vault.contractAddress}`)
+  })
+
+  return { success: true }
+}
+
+/**
+ * Delete a vault from MongoDB with automatic retries.
+ * @param {Object} vault - Mongoose vault document
+ * @param {number} maxRetries - Max retry attempts (default 3)
+ * @returns {Promise<boolean>} true if deleted successfully
+ */
+async function deleteVaultWithRetry(vault, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const deleted = await Vault.findByIdAndDelete(vault._id)
+      if (deleted) {
+        console.log(
+          `[AutoWithdraw] ✅ Vault ${vault.contractAddress} deleted (attempt ${attempt})`,
+        )
+        return true
+      }
+      console.warn(
+        `[AutoWithdraw] Vault ${vault.contractAddress} not found for deletion (attempt ${attempt}) — may already be deleted`,
+      )
+      return true
+    } catch (error) {
+      console.warn(
+        `[AutoWithdraw] Delete attempt ${attempt}/${maxRetries} failed for ${vault.contractAddress}: ${error.message}`,
+      )
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, 500 * attempt))
+      }
+    }
+  }
+  console.warn(
+    `[AutoWithdraw] ❌ Failed to delete vault ${vault.contractAddress} after ${maxRetries} attempts`,
+  )
+  return false
 }

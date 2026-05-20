@@ -12,6 +12,7 @@ function loadPersistedWallet() {
     if (!parsed || typeof parsed !== 'object') return null
     return {
       address: parsed.address ?? null,
+      addresses: Array.isArray(parsed.addresses) ? parsed.addresses : (parsed.address ? [parsed.address] : []),
       publicKey: parsed.publicKey ?? null,
       privateKey: null,
     }

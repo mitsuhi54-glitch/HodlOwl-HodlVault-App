@@ -1425,34 +1425,6 @@ input:checked + .toggle-slider:before {
   border-radius: 16px;
 }
 
-/* JOURNEY LAYOUT */
-.about-journey-layout {
-  display: grid;
-  grid-template-columns: 1fr 240px;
-  gap: 32px;
-  align-items: start;
-}
-
-@media (max-width: 768px) {
-  .about-journey-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.about-journey-image {
-  position: sticky;
-  top: 200px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 20px;
-}
-
-.about-journey-image .about-mascot-img {
-  max-width: 200px;
-  opacity: 0.7;
-}
-
 /* IDENTITY / AVATAR SECTION */
 .about-identity-layout {
   display: grid;
@@ -1590,14 +1562,6 @@ input:checked + .toggle-slider:before {
   font-size: 13px;
   font-weight: 600;
   text-align: right;
-}
-
-/* FOOTER MASCOT */
-.about-footer-mascot {
-  max-width: 80px;
-  height: auto;
-  opacity: 0.5;
-  filter: grayscale(0.5);
 }
 
 /* TECH STACK ICONS */

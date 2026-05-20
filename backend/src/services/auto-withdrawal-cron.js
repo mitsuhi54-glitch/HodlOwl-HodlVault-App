@@ -1,6 +1,6 @@
 /**
  * Auto-Withdrawal Cron Scheduler
- * Runs the auto-withdrawal check every 30 seconds using node-cron.
+ * Runs the auto-withdrawal check every 3 seconds using node-cron.
  * Includes a lock mechanism to prevent overlapping runs.
  */
 
@@ -39,13 +39,13 @@ export function startAutoWithdrawalCron() {
     return
   }
 
-  // Every 30 seconds
-  cronJob = cron.schedule('*/30 * * * * *', runCheck, {
+  // Every 3 seconds for near-instant response
+  cronJob = cron.schedule('*/3 * * * * *', runCheck, {
     scheduled: true,
     timezone: 'UTC',
   })
 
-  console.log('[AutoWithdrawCron] ✅ Started — checking every 30 seconds')
+  console.log('[AutoWithdrawCron] ✅ Started — checking every 3 seconds')
 
   // Run an initial check immediately on startup
   console.log('[AutoWithdrawCron] Running initial check...')

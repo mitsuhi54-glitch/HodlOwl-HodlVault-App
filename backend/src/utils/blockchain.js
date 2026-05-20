@@ -4,6 +4,11 @@ const BCH_NETWORK = process.env.BCH_NETWORK || 'chipnet'
 
 const queryProviders = new Map()
 
+// UTXO cache: key = address, value = { utxos, timestamp }
+// Reduces redundant Electrum calls within short time windows.
+const utxoCache = new Map()
+const UTXO_CACHE_TTL_MS = 10000 // 10 seconds
+
 function getFallbackHostnames(network) {
   if (network === 'testnet3') return ['testnet.bitcoincash.network']
   if (network === 'chipnet') return ['chipnet.bch.ninja']
@@ -40,6 +45,14 @@ export function inferNetworkFromAddress(address) {
 export async function getAddressBalance(address) {
   if (!address) throw new Error('Address is required')
 
+  const now = Date.now()
+
+  // Check cache first
+  const cached = utxoCache.get(address)
+  if (cached && now - cached.timestamp < UTXO_CACHE_TTL_MS) {
+    return cached.balance
+  }
+
   const network = inferNetworkFromAddress(address)
   const hostnames = [null, ...getFallbackHostnames(network)]
   let lastError = null
@@ -55,6 +68,10 @@ export async function getAddressBalance(address) {
       const totalSats = utxos.reduce((sum, u) => sum + BigInt(u.satoshis), 0n)
       const utxoDetails = utxos.map(u => `{txid:${u.txid?.slice(0,12)}… sats:${u.satoshis}}`)
       console.log(`[BAL_TRACE] getAddressBalance | hostname="${hostname || 'default'}" | ${utxos.length} UTXOs | ${utxoDetails.join(', ')} | total=${Number(totalSats)} sats | took=${elapsed}ms`)
+
+      // Cache the result
+      utxoCache.set(address, { utxos, balance: totalSats, timestamp: now })
+
       return totalSats
     } catch (e) {
       lastError = e
@@ -73,6 +90,14 @@ export async function getAddressBalance(address) {
 export async function getAddressUtxos(address) {
   if (!address) throw new Error('Address is required')
 
+  const now = Date.now()
+
+  // Check cache first
+  const cached = utxoCache.get(address)
+  if (cached && now - cached.timestamp < UTXO_CACHE_TTL_MS) {
+    return cached.utxos
+  }
+
   const network = inferNetworkFromAddress(address)
   const hostnames = [null, ...getFallbackHostnames(network)]
   let lastError = null
@@ -81,6 +106,11 @@ export async function getAddressUtxos(address) {
     try {
       const provider = getQueryProvider(network, hostname)
       const utxos = await provider.getUtxos(address)
+      const mapped = utxos.map((u) => ({
+        txid: u.txid,
+        vout: u.vout,
+        satoshis: Number(u.satoshis),
+      }))
       console.log('[DEBUG:utxos] getAddressUtxos raw result:', utxos.map(u => ({
         txid: u.txid,
         txidLength: u.txid?.length,
@@ -88,11 +118,12 @@ export async function getAddressUtxos(address) {
         vout: u.vout,
         satoshis: u.satoshis,
       })))
-      return utxos.map((u) => ({
-        txid: u.txid,
-        vout: u.vout,
-        satoshis: Number(u.satoshis),
-      }))
+
+      // Cache the result
+      const balance = mapped.reduce((sum, u) => sum + BigInt(u.satoshis), 0n)
+      utxoCache.set(address, { utxos: mapped, balance, timestamp: now })
+
+      return mapped
     } catch (e) {
       lastError = e
     }

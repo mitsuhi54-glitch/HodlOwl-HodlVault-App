@@ -26,21 +26,40 @@ export async function fetchOraclePrice() {
   }
 
   try {
-    // Step 1: Get oracle list to find current price
-    const oraclesResponse = await fetch(ORACLE_API_URL, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(10000), // 10 second timeout
-    })
+    // Fetch oracle list and messages IN PARALLEL (neither depends on the other)
+    const [oraclesResponse, messageResponse] = await Promise.all([
+      fetch(ORACLE_API_URL, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(10000),
+      }),
+      fetch(
+        `https://oracles.generalprotocols.com/api/v1/oracleMessages?publicKey=${ORACLE_PUBKEY}&count=1`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000),
+        },
+      ),
+    ])
 
     if (!oraclesResponse.ok) {
       throw new Error(`Oracle API returned status: ${oraclesResponse.status}`)
     }
+    if (!messageResponse.ok) {
+      throw new Error(`Oracle messages API returned status: ${messageResponse.status}`)
+    }
 
-    const oraclesData = await oraclesResponse.json()
+    const [oraclesData, messageData] = await Promise.all([
+      oraclesResponse.json(),
+      messageResponse.json(),
+    ])
 
     // Find the PHP/BCH oracle
     const phpBchOracle = oraclesData.oracles.find((oracle) => oracle.publicKey === ORACLE_PUBKEY)
@@ -62,24 +81,6 @@ export async function fetchOraclePrice() {
       throw new Error(`Oracle price out of reasonable range: ₱${priceInPHP}`)
     }
 
-    // Step 2: Get the latest oracle message + signature
-    const messageResponse = await fetch(
-      `https://oracles.generalprotocols.com/api/v1/oracleMessages?publicKey=${ORACLE_PUBKEY}&count=1`,
-      {
-        method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(10000),
-      },
-    )
-
-    if (!messageResponse.ok) {
-      throw new Error(`Oracle messages API returned status: ${messageResponse.status}`)
-    }
-
-    const messageData = await messageResponse.json()
     const oracleMessage = messageData.oracleMessages[0]
 
     if (!oracleMessage) {

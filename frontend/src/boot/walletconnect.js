@@ -62,6 +62,7 @@ let connectionPromise = null // Track ongoing connection attempts
 let connectionStatusInterval = null // Periodic status checker
 let consecutiveFailures = 0 // Track consecutive status check failures
 let visibilityHandler = null // Page Visibility listener reference
+let sessionNegotiationInProgress = false // Pause status checker during negotiation
 
 const BITCOIN_SIGNED_MESSAGE_PREFIX = (() => {
   const encoder = new TextEncoder()
@@ -116,6 +117,10 @@ function startConnectionStatusChecker(store) {
     // Skip checks entirely when tab is hidden — prevents false disconnects
     // from browser-throttled connections on inactive tabs
     if (document.visibilityState === 'hidden') return
+
+    // Skip checks during session negotiation — prevents false disconnects
+    // when syncSessionToStore is still in progress
+    if (sessionNegotiationInProgress) return
 
     if (currentSession && signClient) {
       try {
@@ -428,6 +433,7 @@ export function initializeWalletConnect(store) {
 
     async _performConnection(store, connectStart, onModalOpen) {
       if (!store) return null
+      sessionNegotiationInProgress = true
 
       const stepStart = performance.now()
       try {
@@ -571,6 +577,8 @@ export function initializeWalletConnect(store) {
         console.error('WalletConnect connection error:', err?.message || err)
 
         throw err
+      } finally {
+        sessionNegotiationInProgress = false
       }
     },
 
@@ -666,83 +674,97 @@ async function syncSessionToStore(store, client, session) {
 
   console.log('[WC TIMING] syncSessionToStore: Starting...')
 
-  try {
-    console.log('[WC TIMING] syncSessionToStore: Requesting bch_getAddresses...')
-    const addrStart = performance.now()
-    const addresses = await requestWithTimeout(client, {
-      chainId,
-      topic: session.topic,
-      request: { method: 'bch_getAddresses', params: {} },
-    })
-    const addrCount = Array.isArray(addresses) ? addresses.length : 0
-    console.log(`[BAL_TRACE] bch_getAddresses returned ${addrCount} address(es)`)
-    const dedupedAddrs = []
-    if (addrCount > 0) {
-      for (let i = 0; i < addrCount; i++) {
-        const a = addresses[i]
-        // Strip leading "n-" prefix if present (Paytaca format)
-        const clean = typeof a === 'string' ? a.replace(/^\d+-/, '') : a
-        console.log(`[BAL_TRACE]   address[${i}] raw="${a}" → clean="${clean}"`)
-        if (clean && !dedupedAddrs.includes(clean)) dedupedAddrs.push(clean)
-      }
-    }
-    const address = dedupedAddrs.length > 0 ? dedupedAddrs[0] : null
-    console.log(`[BAL_TRACE] ${dedupedAddrs.length} unique address(es):`, JSON.stringify(dedupedAddrs))
-    console.log(`[BAL_TRACE] Using address[0]: "${address}"`)
-    console.log(
-      `[WC TIMING] syncSessionToStore: bch_getAddresses took ${(performance.now() - addrStart).toFixed(2)}ms`,
-    )
-
-    // Try to extract public key from session accounts or request it
-    let publicKey = null
-    if (address) {
-      try {
-        console.log('[WC TIMING] syncSessionToStore: Requesting bch_getPublicKey...')
-        const pkStart = performance.now()
-        const pubKeyResult = await requestWithTimeout(client, {
-          chainId,
-          topic: session.topic,
-          request: { method: 'bch_getPublicKey', params: {} },
-        })
-        console.log(
-          `[WC TIMING] syncSessionToStore: bch_getPublicKey took ${(performance.now() - pkStart).toFixed(2)}ms`,
-        )
-        if (pubKeyResult && typeof pubKeyResult === 'string') {
-          publicKey = pubKeyResult
-        }
-      } catch {
-        console.log('[WC TIMING] syncSessionToStore: bch_getPublicKey not supported (optional)')
-        // Method not supported - that's okay, we'll work with address only
-      }
-    }
-
-    if (address) {
-      const commitStart = performance.now()
-      store.commit('wallet/SET_WALLET', {
-        address,
-        addresses: dedupedAddrs,
-        publicKey,
-        privateKey: null,
+  // Retry bch_getAddresses up to 3 times with 1s backoff
+  let addresses = null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      console.log(`[WC TIMING] syncSessionToStore: Requesting bch_getAddresses (attempt ${attempt}/3)...`)
+      const addrStart = performance.now()
+      addresses = await requestWithTimeout(client, {
+        chainId,
+        topic: session.topic,
+        request: { method: 'bch_getAddresses', params: {} },
       })
       console.log(
-        `[WC TIMING] syncSessionToStore: Store commit took ${(performance.now() - commitStart).toFixed(2)}ms`,
+        `[WC TIMING] syncSessionToStore: bch_getAddresses attempt ${attempt} took ${(performance.now() - addrStart).toFixed(2)}ms`,
       )
-      console.log(
-        `[WC TIMING] syncSessionToStore: TOTAL ${(performance.now() - syncStart).toFixed(2)}ms`,
-      )
-      return true
-    } else {
-      console.warn('DEBUG: No address retrieved from wallet')
-      return false
+      break // Success — exit retry loop
+    } catch (err) {
+      console.warn(`[WC] bch_getAddresses attempt ${attempt}/3 failed: ${err.message}`)
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt))
+      } else {
+        console.error('[WC] All 3 attempts for bch_getAddresses failed')
+        return false
+      }
     }
-  } catch (e) {
-    console.warn('WalletConnect: could not get addresses', e)
+  }
+
+  if (!addresses) return false
+
+  const addrCount = Array.isArray(addresses) ? addresses.length : 0
+  console.log(`[BAL_TRACE] bch_getAddresses returned ${addrCount} address(es)`)
+  const dedupedAddrs = []
+  if (addrCount > 0) {
+    for (let i = 0; i < addrCount; i++) {
+      const a = addresses[i]
+      // Strip leading "n-" prefix if present (Paytaca format)
+      const clean = typeof a === 'string' ? a.replace(/^\d+-/, '') : a
+      console.log(`[BAL_TRACE]   address[${i}] raw="${a}" → clean="${clean}"`)
+      if (clean && !dedupedAddrs.includes(clean)) dedupedAddrs.push(clean)
+    }
+  }
+  const address = dedupedAddrs.length > 0 ? dedupedAddrs[0] : null
+  console.log(`[BAL_TRACE] ${dedupedAddrs.length} unique address(es):`, JSON.stringify(dedupedAddrs))
+  console.log(`[BAL_TRACE] Using address[0]: "${address}"`)
+
+  // Try to extract public key from session accounts or request it
+  let publicKey = null
+  if (address) {
+    try {
+      console.log('[WC TIMING] syncSessionToStore: Requesting bch_getPublicKey...')
+      const pkStart = performance.now()
+      const pubKeyResult = await requestWithTimeout(client, {
+        chainId,
+        topic: session.topic,
+        request: { method: 'bch_getPublicKey', params: {} },
+      })
+      console.log(
+        `[WC TIMING] syncSessionToStore: bch_getPublicKey took ${(performance.now() - pkStart).toFixed(2)}ms`,
+      )
+      if (pubKeyResult && typeof pubKeyResult === 'string') {
+        publicKey = pubKeyResult
+      }
+    } catch {
+      console.log('[WC TIMING] syncSessionToStore: bch_getPublicKey not supported (optional)')
+      // Method not supported - that's okay, we'll work with address only
+    }
+  }
+
+  if (address) {
+    const commitStart = performance.now()
+    store.commit('wallet/SET_WALLET', {
+      address,
+      addresses: dedupedAddrs,
+      publicKey,
+      privateKey: null,
+    })
+    console.log(
+      `[WC TIMING] syncSessionToStore: Store commit took ${(performance.now() - commitStart).toFixed(2)}ms`,
+    )
+    console.log(
+      `[WC TIMING] syncSessionToStore: TOTAL ${(performance.now() - syncStart).toFixed(2)}ms`,
+    )
+    return true
+  } else {
+    console.warn('DEBUG: No address retrieved from wallet')
     return false
   }
 }
 
 export async function restoreSessionIfAny(store) {
   if (!store) return
+  sessionNegotiationInProgress = true
   let foundSession = false
   try {
     const client = await getSignClient(store)
@@ -766,8 +788,8 @@ export async function restoreSessionIfAny(store) {
         currentSession = bchSession
         const synced = await syncSessionToStore(store, client, bchSession)
         if (!synced) {
-          // Wallet didn't respond — stale session, clean it up
-          console.log('[WC] Session restore failed — wallet unreachable, disconnecting stale session')
+          // Wallet didn't respond after retries — stale session, clean it up
+          console.log('[WC] Session restore failed after retries — disconnecting stale session')
           await disconnectStale()
         }
       } else {
@@ -781,6 +803,8 @@ export async function restoreSessionIfAny(store) {
     if (foundSession) {
       store.commit('wallet/CLEAR_WALLET')
     }
+  } finally {
+    sessionNegotiationInProgress = false
   }
 }
 

@@ -336,6 +336,12 @@
                 class="custom-input"
                 prefix="₱"
               />
+              <div
+                v-if="targetPrice"
+                style="font-size: 12px; color: var(--color-text-dim); margin-top: 4px; text-align: right"
+              >
+                ₱{{ Number(targetPrice).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+              </div>
             </div>
           </div>
 
@@ -351,6 +357,7 @@
               >
                 {{ preset.label }}
                 <span style="opacity: 0.7; margin-left: 2px">(+{{ preset.percent }}%)</span>
+                <span class="text-neon" style="margin-left: 4px">₱{{ preset.formattedPrice }}</span>
               </div>
             </div>
           </div>
@@ -1193,6 +1200,10 @@ export default defineComponent({
       ].map((p) => ({
         ...p,
         targetPrice: Math.round(base * p.multiplier * 100) / 100,
+        formattedPrice: Number(Math.round(base * p.multiplier * 100) / 100).toLocaleString('en-PH', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
       }))
     },
 
@@ -1685,8 +1696,8 @@ export default defineComponent({
     // ─── Create Vault ────────────────────────────────────────
     selectPreset(key, multiplier) {
       this.selectedPreset = key
-      if (this.targetPrice) {
-        this.targetPrice = Math.round(this.targetPrice * multiplier)
+      if (this.currentBchPrice) {
+        this.targetPrice = Math.round(Number(this.currentBchPrice) * multiplier * 100) / 100
       }
     },
 

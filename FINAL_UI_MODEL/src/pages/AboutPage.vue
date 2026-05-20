@@ -267,9 +267,9 @@
         <div>
           <h3 class="label-tiny">Development Info</h3>
           <p style="font-size: 13px;">
-            Institution: [Academic System Project]<br>
-            Version: v2.3.0 (Chipnet Release)<br>
-            Author: [Technical Development Team]
+            Institution: Intern System Project<br>
+            Version: v4.0.1 (Chipnet Release)<br>
+            Author: Edo_Tensei
           </p>
         </div>
       </div>

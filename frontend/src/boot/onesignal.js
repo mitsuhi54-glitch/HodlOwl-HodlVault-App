@@ -199,14 +199,33 @@ function waitForSubscription(timeoutMs = 8000) {
   })
 }
 
+function waitForOneSignal(timeoutMs = 10000) {
+  return new Promise((resolve) => {
+    if (window.OneSignal) return resolve(true)
+    const interval = setInterval(() => {
+      if (window.OneSignal) {
+        clearInterval(interval)
+        clearTimeout(failTimer)
+        resolve(true)
+      }
+    }, 200)
+    const failTimer = setTimeout(() => {
+      clearInterval(interval)
+      resolve(false)
+    }, timeoutMs)
+  })
+}
+
 export async function requestNotificationPermission() {
-  const OneSignal = window.OneSignal
   log('REQ_PERM', `requestNotificationPermission() called | Notification.permission=${Notification.permission}`)
 
-  if (!OneSignal) {
-    warn('REQ_PERM', 'OneSignal SDK not loaded yet')
+  const loaded = await waitForOneSignal()
+  if (!loaded) {
+    warn('REQ_PERM', 'OneSignal SDK not loaded after waiting')
     return { success: false, error: 'OneSignal SDK not loaded yet' }
   }
+
+  const OneSignal = window.OneSignal
 
   try {
     if (OneSignal.User.PushSubscription.optedIn) {
@@ -248,15 +267,6 @@ export async function requestNotificationPermission() {
 
     const result = await waitForSubscription()
     log('REQ_PERM', `waitForSubscription result: success=${result.success} | playerId=${result.playerId || 'null'} | error=${result.error || 'null'}`)
-
-    if (result.success && result.playerId) {
-      const walletAddress = store.state.wallet?.address
-      if (walletAddress) {
-        log('REQ_PERM', 'Registering new player ID with backend')
-        await oneSignalApi.registerPlayerId(result.playerId)
-        log('REQ_PERM', 'Backend registration of new sub successful')
-      }
-    }
     return result
   } catch (err) {
     warn('REQ_PERM', `Prompt/registration failed: ${err.message}`, err)
