@@ -137,8 +137,8 @@
         <div class="flow-step">
           <div class="step-number">06</div>
           <div>
-            <h3>Withdraw Securely</h3>
-            <p>Sign the transaction with your wallet. Funds go directly from the contract to your address — no middleman, no delays.</p>
+            <h3>Automatic Payout</h3>
+            <p>Once the price target is met, the system sends your BCH back to your wallet automatically — no signing required. Your address was built into the contract at creation, so the funds can only go to you.</p>
           </div>
         </div>
       </div>

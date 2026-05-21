@@ -328,13 +328,17 @@
             <div class="field">
               <label class="label-tiny">Target Price (PHP)</label>
               <q-input
-                v-model="targetPrice"
-                type="number"
+                :model-value="targetPriceDisplay"
+                @update:model-value="onTargetPriceInput"
+                @focus="onTargetPriceFocus"
+                @blur="onTargetPriceBlur"
+                type="text"
                 outlined
                 dense
                 dark
                 class="custom-input"
                 prefix="₱"
+                inputmode="decimal"
               />
               <div
                 v-if="targetPrice"
@@ -1085,6 +1089,8 @@ export default defineComponent({
       deploying: false,
       vaultName: '',
       targetPrice: null,
+      targetPriceRaw: '',
+      targetPriceFocused: false,
       selectedPreset: null,
       autoWithdrawal: false,
 
@@ -1187,6 +1193,15 @@ export default defineComponent({
       if (this.vaults.length === 0) return 0
       const total = this.vaults.reduce((s, v) => s + this.getVaultProgress(v), 0)
       return Math.round(total / this.vaults.length)
+    },
+
+    targetPriceDisplay() {
+      if (this.targetPriceFocused) return this.targetPriceRaw
+      if (this.targetPrice == null || this.targetPrice === '') return ''
+      return Number(this.targetPrice).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
     },
 
     priceTargetPresets() {
@@ -1694,10 +1709,44 @@ export default defineComponent({
     },
 
     // ─── Create Vault ────────────────────────────────────────
+    onTargetPriceInput(val) {
+      const cleaned = val.replace(/[^0-9.]/g, '')
+      const parts = cleaned.split('.')
+      const sanitized = parts[0] + (parts.length > 1 ? '.' + parts.slice(1).join('') : '')
+      this.targetPriceRaw = sanitized
+      const num = (sanitized === '' || sanitized === '.') ? null : parseFloat(sanitized)
+      this.targetPrice = (num != null && !isNaN(num)) ? num : null
+      this.selectedPreset = null
+    },
+
+    onTargetPriceFocus() {
+      this.targetPriceFocused = true
+      this.targetPriceRaw = this.targetPrice != null ? String(this.targetPrice) : ''
+    },
+
+    onTargetPriceBlur() {
+      this.targetPriceFocused = false
+      const cleaned = this.targetPriceRaw.replace(/[^0-9.]/g, '')
+      const parts = cleaned.split('.')
+      const sanitized = parts[0] + (parts.length > 1 ? '.' + parts.slice(1).join('') : '')
+      const num = (sanitized === '' || sanitized === '.') ? null : parseFloat(sanitized)
+      this.targetPrice = (num != null && !isNaN(num)) ? num : null
+      if (this.targetPrice != null) {
+        this.targetPriceRaw = Number(this.targetPrice).toLocaleString('en-PH', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      } else {
+        this.targetPriceRaw = ''
+      }
+    },
+
     selectPreset(key, multiplier) {
       this.selectedPreset = key
       if (this.currentBchPrice) {
-        this.targetPrice = Math.round(Number(this.currentBchPrice) * multiplier * 100) / 100
+        const price = Math.round(Number(this.currentBchPrice) * multiplier * 100) / 100
+        this.targetPrice = price
+        this.targetPriceRaw = String(price)
       }
     },
 

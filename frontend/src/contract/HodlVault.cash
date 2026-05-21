@@ -24,9 +24,9 @@ contract HodlVault(bytes20 ownerPkh, pubkey oraclePk, int priceTarget) {
     bytes priceBytes = oracleMessage.split(8)[0];
     require(int(priceBytes) >= priceTarget);
 
-    // 3. Covenant: Output 0 must go to the owner P2PKH
-    // This ensures all funds (from all combined UTXOs) go to the owner
-    bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh);
-    require(tx.outputs[0].lockingBytecode == ownerLock);
+    // 3. COVENANT (restricts WHERE the money goes — not who can spend)
+    bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh); // (A) build template of a valid owner output
+    require(tx.outputs[0].lockingBytecode == ownerLock);    // (B) enforce output[0] matches that template
+    // ^ (A)+(B) = one covenant rule: all funds go to your address, no one can redirect them
   }
 }

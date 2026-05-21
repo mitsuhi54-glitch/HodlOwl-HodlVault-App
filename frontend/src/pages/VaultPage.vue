@@ -68,7 +68,7 @@
                     flat
                     bordered
                     class="q-pa-md"
-                    style="background-color: var(--color-surface-elevated); border-color: var(--color-border)"
+                    style="background-color: #2a2a2a; border-color: #444"
                   >
                     <div class="text-subtitle2 text-grey-4 q-mb-sm">Connected Address</div>
                     <div class="text-caption text-primary q-mb-xs">
@@ -89,9 +89,11 @@
                     v-model="form.vaultName"
                     type="text"
                     outlined
+                    dark
                     placeholder="My HODL Vault"
                     class="text-h6"
                     input-class="text-center"
+                    style="background-color: #2a2a2a"
                     hint="Give your vault a memorable name"
                     persistent-hint
                   >
@@ -114,9 +116,11 @@
                     step="0.01"
                     min="0.01"
                     outlined
+                    dark
                     placeholder="Enter your target price per BCH"
                     class="text-h6"
                     input-class="text-center"
+                    style="background-color: #2a2a2a"
                     :rules="[(val) => val > 0 || 'Price target must be greater than 0']"
                     :hint="
                       currentBchPrice
@@ -132,52 +136,6 @@
                       <q-spinner v-if="priceLoading" size="sm" color="primary" />
                     </template>
                   </q-input>
-                </div>
-
-                <!-- Price Target Presets -->
-                <div v-if="currentBchPrice" class="q-mb-lg">
-                  <div class="text-caption text-grey-5 q-mb-sm">
-                    Quick select a target ratio:
-                  </div>
-                  <div class="row q-gutter-xs">
-                    <q-btn
-                      v-for="preset in priceTargetPresets"
-                      :key="preset.label"
-                      dense
-                      outline
-                      no-caps
-                      :color="preset.riskColor"
-                      class="col"
-                      :class="{ 'bg-grey-7 text-white': form.priceTarget === preset.targetPrice }"
-                      @click="form.priceTarget = preset.targetPrice"
-                    >
-                      <div class="column items-center q-py-xs">
-                        <span class="text-caption">{{ preset.label }}</span>
-                        <span class="text-weight-bold">+{{ preset.percent }}%</span>
-                        <span class="text-caption text-grey-5">₱{{ preset.formattedPrice }}</span>
-                      </div>
-                      <q-tooltip>
-                        <div class="text-center">
-                          <div class="text-weight-bold">{{ preset.label }}</div>
-                          <div>Target: +{{ preset.percent }}% from current price</div>
-                          <div class="text-caption">Price: ₱{{ preset.formattedPrice }}</div>
-                          <q-badge :color="preset.riskColor" class="q-mt-xs">Risk: {{ preset.riskLevel }}</q-badge>
-                        </div>
-                      </q-tooltip>
-                    </q-btn>
-                  </div>
-                  <div class="row q-mt-xs q-gutter-xs">
-                    <q-badge
-                      v-for="preset in priceTargetPresets"
-                      :key="'badge-' + preset.label"
-                      :color="preset.riskColor"
-                      class="col cursor-pointer"
-                      style="padding: 4px 0"
-                      @click="form.priceTarget = preset.targetPrice"
-                    >
-                      {{ preset.riskLevel }}
-                    </q-badge>
-                  </div>
                 </div>
 
                 <!-- Auto-Withdrawal Option -->
@@ -263,7 +221,7 @@
 </template>
 
 <script>
-import { recoverPublicKeyHash, restoreSessionIfAny } from 'src/boot/walletconnect'
+import { recoverPublicKeyHash } from 'src/boot/walletconnect'
 import { defineComponent } from 'vue'
 import {
   calculateContractAddress,
@@ -280,7 +238,6 @@ export default defineComponent({
   data() {
     return {
       form: {
-        // amount: null,
         priceTarget: null,
         vaultName: '',
       },
@@ -301,9 +258,6 @@ export default defineComponent({
         signature_hex: '',
         oracle_pubkey_hex: '',
       },
-
-      // Vault persistence (localStorage)
-      vaultPersistKey: 'hodl-vault-active-vault',
 
       // Original funding address for auto-withdrawal
       originalFundingAddress: '',
@@ -385,25 +339,6 @@ export default defineComponent({
       return null
     },
 
-    priceTargetPresets() {
-      if (!this.currentBchPrice) return []
-      const base = Number(this.currentBchPrice)
-      const presets = [
-        { label: 'Conservative', percent: 10, riskColor: 'positive', riskLevel: 'Low Risk', multiplier: 1.1 },
-        { label: 'Moderate', percent: 25, riskColor: 'warning', riskLevel: 'Medium Risk', multiplier: 1.25 },
-        { label: 'Ambitious', percent: 50, riskColor: 'orange', riskLevel: 'High Risk', multiplier: 1.5 },
-        { label: 'Aggressive', percent: 100, riskColor: 'negative', riskLevel: 'Very High Risk', multiplier: 2.0 },
-      ]
-      return presets.map((p) => ({
-        ...p,
-        targetPrice: Math.round(base * p.multiplier * 100) / 100,
-        formattedPrice: Number(Math.round(base * p.multiplier * 100) / 100).toLocaleString('en-PH', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }),
-      }))
-    },
-
     developerChainId() {
       return this.$walletConnect && typeof this.$walletConnect.getChainId === 'function'
         ? this.$walletConnect.getChainId()
@@ -413,49 +348,11 @@ export default defineComponent({
     chipnetExplorerAddressUrl() {
       if (!this.vault || !this.vault.contractAddress) return ''
       const addr = encodeURIComponent(this.vault.contractAddress)
-      const prefix = this.vault.contractAddress.includes(':') ? this.vault.contractAddress.split(':')[0] : null
-      const network = prefix === 'bitcoincash' ? 'mainnet' : 'chipnet'
-      const urls = {
-        mainnet: `https://explorer.bitcoin.com/bch/address/${addr}`,
-        chipnet: `https://chipnet.bch.ninja/address/${addr}`,
-      }
-      return urls[network] || urls.chipnet
+      return `https://chipnet.bch.ninja/address/${addr}`
     },
   },
 
   methods: {
-    persistVaultState(vaultState) {
-      if (typeof localStorage === 'undefined') return
-      try {
-        if (!vaultState) {
-          localStorage.removeItem(this.vaultPersistKey)
-          return
-        }
-        localStorage.setItem(this.vaultPersistKey, JSON.stringify(vaultState))
-      } catch {
-        // ignore persistence errors
-      }
-    },
-
-    clearPersistedVaultState() {
-      if (typeof localStorage === 'undefined') return
-      try {
-        localStorage.removeItem(this.vaultPersistKey)
-      } catch {
-        // ignore persistence errors
-      }
-    },
-
-    loadPersistedVaultState() {
-      if (typeof localStorage === 'undefined') return null
-      try {
-        const stored = localStorage.getItem(this.vaultPersistKey)
-        return stored ? JSON.parse(stored) : null
-      } catch {
-        return null
-      }
-    },
-
     loadSelectedVault(vaultData) {
       try {
         // ✅ Defensive: Convert old priceTarget field to priceTargetCents if needed
@@ -542,13 +439,6 @@ export default defineComponent({
       }
     },
 
-    formatPrice(value) {
-      return Number(value).toLocaleString('en-PH', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })
-    },
-
     async onLockFunds() {
       if (!this.canLockFunds) return
 
@@ -571,25 +461,11 @@ export default defineComponent({
           throw new Error('Oracle public key not loaded. Refresh the price first.')
         }
 
-        // Check for duplicate vault with same parameters
-        const existingVault = await vaultStorage.checkForDuplicateVault(
-          this.walletAddress,
-          this.developerPriceTargetCents, // Use cents for duplicate check
-        )
-        if (existingVault) {
-          this.$q.notify({
-            type: 'warning',
-            message: `You already have a vault with target price ₱${this.form.priceTarget}. Each vault must have a unique target price.`,
-            timeout: 5000,
-          })
-          return
-        }
-
         const contractAddress = await calculateContractAddress(
           ownerPkhHex,
-          ORACLE_PUBKEY,
+          ORACLE_PUBKEY, // Use Oracles.cash public key
           priceTargetCents,
-          this.walletAddress,
+          this.walletAddress, // Include salt for uniqueness
         )
 
         const contract = initializeHodlVaultContract(
@@ -799,33 +675,7 @@ export default defineComponent({
 
   watch: {
     walletAddress(newAddress, oldAddress) {
-      if (!newAddress) {
-        console.warn('[VaultPage] Wallet address became null — attempting session recovery')
-        // Attempt silent recovery before showing "connect your wallet"
-        this.$nextTick(async () => {
-          try {
-            await restoreSessionIfAny(this.$store)
-            if (this.$store.state.wallet?.address) {
-              console.log('[VaultPage] Wallet session recovered successfully')
-              return
-            }
-          } catch (e) {
-            console.warn('[VaultPage] Wallet recovery failed:', e)
-          }
-          // Recovery failed — reset vault state
-          this.vault = null
-          this.depositing = false
-          this.clearPersistedVaultState()
-          if (this.balanceInterval) {
-            clearInterval(this.balanceInterval)
-            this.balanceInterval = null
-          }
-          if (this.depositPollInterval) {
-            clearInterval(this.depositPollInterval)
-            this.depositPollInterval = null
-          }
-        })
-      } else if (newAddress !== oldAddress) {
+      if (!newAddress || newAddress !== oldAddress) {
         this.vault = null
         this.depositing = false
         this.clearPersistedVaultState()
@@ -849,35 +699,12 @@ export default defineComponent({
   },
 
   mounted() {
-    // Check if we're coming from vault management with a selected vault
-    const selectedVault = localStorage.getItem('hodl-vault-selected-vault')
-    if (selectedVault) {
-      try {
-        const vault = JSON.parse(selectedVault)
-        this.loadSelectedVault(vault)
-        localStorage.removeItem('hodl-vault-selected-vault') // Clean up
-      } catch (error) {
-        console.error('Failed to load selected vault:', error)
-        // Fallback to legacy loading
-        this.loadPersistedVaultState()
-      }
-    } else {
-      // Load existing vault from legacy system
-      this.loadPersistedVaultState()
-    }
-
     // Start price monitoring
     this.refreshPrice()
 
     this.balanceInterval = setInterval(() => {
       this.refreshVaultBalance()
     }, 30000)
-
-    // Attempt wallet recovery if wallet state was lost (prevents false "connect your wallet" banners)
-    if (!this.hasWallet) {
-      console.log('[VaultPage] mounted with no wallet — attempting silent session recovery')
-      restoreSessionIfAny(this.$store)
-    }
   },
 
   beforeUnmount() {
