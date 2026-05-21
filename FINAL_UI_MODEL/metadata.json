@@ -1,8 +1,0 @@
-{
-  "name": "HodlVault",
-  "description": "A high-fidelity cyberpunk fintech UI for force-holding Bitcoin Cash assets.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
