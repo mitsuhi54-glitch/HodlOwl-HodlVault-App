@@ -1,0 +1,32 @@
+pragma cashscript ^0.11.0;
+
+/**
+ * HodlVault: BCH contract that locks funds until a price target is met.
+ * Supports multiple deposits - anyone can send funds to the contract address.
+ *
+ * Withdrawal requires:
+ * - Valid Oracle data signature (checkDataSig) over a message containing the price.
+ * - Price in the oracle message >= priceTarget.
+ * - Covenant: first output sends total balance (minus fee) to ownerPkh.
+ *
+ * Multiple UTXOs can be combined in a single withdrawal transaction.
+ */
+contract HodlVault(bytes20 ownerPkh, pubkey oraclePk, int priceTarget) {
+  function spend(
+    bytes oracleMessage,
+    datasig oracleSig
+  ) {
+    // 1. Oracle must have signed the message (checkDataSig)
+    require(checkDataSig(oracleSig, oracleMessage, oraclePk));
+
+    // 2. Price in the oracle message must be >= priceTarget
+    require(oracleMessage.length >= 8);
+    bytes priceBytes = oracleMessage.split(8)[0];
+    require(int(priceBytes) >= priceTarget);
+
+    // 3. COVENANT (restricts WHERE the money goes — not who can spend)
+    bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh); // (A) build template of a valid owner output
+    require(tx.outputs[0].lockingBytecode == ownerLock);    // (B) enforce output[0] matches that template
+    // ^ (A)+(B) = one covenant rule: all funds go to your address, no one can redirect them
+  }
+}

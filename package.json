@@ -1,0 +1,33 @@
+{
+  "name": "hodlvault-demo",
+  "version": "4.0.1",
+  "description": "BCH HodlVault Demo — mock frontend for portfolio showcase",
+  "type": "module",
+  "private": true,
+  "imports": {
+    "#q-app/wrappers": "./node_modules/@quasar/app-vite/exports/wrappers/wrappers.js"
+  },
+  "scripts": {
+    "dev": "quasar dev",
+    "build": "quasar build"
+  },
+  "dependencies": {
+    "@bitauth/libauth": "^3.1.0-next.8",
+    "@quasar/extras": "^1.16.4",
+    "axios": "^1.15.0",
+    "quasar": "^2.16.0",
+    "vue": "^3.5.22",
+    "vue-router": "^5.0.0",
+    "vuex": "^4.1.0"
+  },
+  "devDependencies": {
+    "@quasar/app-vite": "2.0.0",
+    "autoprefixer": "^10.4.2",
+    "buffer": "^6.0.3",
+    "events": "^3.3.0",
+    "postcss": "^8.4.14",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5",
+    "vite-plugin-node-polyfills": "^0.26.0"
+  }
+}

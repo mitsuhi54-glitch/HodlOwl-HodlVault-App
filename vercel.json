@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "buildCommand": "npx quasar build",
+  "outputDirectory": "dist/spa",
+  "framework": null,
+  "installCommand": "npm install --legacy-peer-deps"
+}

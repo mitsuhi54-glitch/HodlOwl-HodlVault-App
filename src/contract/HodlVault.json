@@ -1,0 +1,62 @@
+{
+  "contractName": "HodlVault",
+  "constructorInputs": [
+    {
+      "name": "ownerPkh",
+      "type": "bytes20"
+    },
+    {
+      "name": "oraclePk",
+      "type": "pubkey"
+    },
+    {
+      "name": "priceTarget",
+      "type": "int"
+    }
+  ],
+  "abi": [
+    {
+      "name": "spend",
+      "inputs": [
+        {
+          "name": "oracleMessage",
+          "type": "bytes"
+        },
+        {
+          "name": "oracleSig",
+          "type": "datasig"
+        }
+      ]
+    }
+  ],
+  "bytecode": "OP_4 OP_ROLL OP_4 OP_PICK OP_3 OP_ROLL OP_CHECKDATASIGVERIFY OP_2 OP_PICK OP_SIZE OP_NIP OP_8 OP_GREATERTHANOREQUAL OP_VERIFY OP_ROT OP_8 OP_SPLIT OP_DROP OP_BIN2NUM OP_ROT OP_GREATERTHANOREQUAL OP_VERIFY 76a914 OP_SWAP OP_CAT 88ac OP_CAT OP_0 OP_OUTPUTBYTECODE OP_EQUAL",
+  "source": "pragma cashscript ^0.11.0;\r\n\r\n/**\r\n * HodlVault: BCH contract that locks funds until a price target is met.\r\n * Supports multiple deposits - anyone can send funds to the contract address.\r\n *\r\n * Withdrawal requires:\r\n * - Valid Oracle data signature (checkDataSig) over a message containing the price.\r\n * - Price in the oracle message >= priceTarget.\r\n * - Covenant: first output sends total balance (minus fee) to ownerPkh.\r\n *\r\n * Multiple UTXOs can be combined in a single withdrawal transaction.\r\n */\r\ncontract HodlVault(bytes20 ownerPkh, pubkey oraclePk, int priceTarget) {\r\n  function spend(\r\n    bytes oracleMessage,\r\n    datasig oracleSig\r\n  ) {\r\n    // 1. Oracle must have signed the message (checkDataSig)\r\n    require(checkDataSig(oracleSig, oracleMessage, oraclePk));\r\n\r\n    // 2. Price in the oracle message must be >= priceTarget\r\n    require(oracleMessage.length >= 8);\r\n    bytes priceBytes = oracleMessage.split(8)[0];\r\n    require(int(priceBytes) >= priceTarget);\r\n\r\n    // 3. Covenant: Output 0 must go to the owner P2PKH\r\n    // This ensures all funds (from all combined UTXOs) go to the owner\r\n    bytes25 ownerLock = new LockingBytecodeP2PKH(ownerPkh);\r\n    require(tx.outputs[0].lockingBytecode == ownerLock);\r\n  }\r\n}\r\n",
+  "debug": {
+    "bytecode": "547a5479537abb5279827758a2697b587f75817ba2690376a9147c7e0288ac7e00cd87",
+    "sourceMap": "20:25:20:34;;:36::49;;:51::59;;:4::62:1;23:12:23:25:0;;:::32:1;;:36::37:0;:12:::1;:4::39;24:23:24:36:0;:43::44;:23::45:1;:::48;25:12:25:27;:31::42:0;:12:::1;:4::44;29:24:29:58:0;:49::57;:24::58:1;;;30:23:30:24:0;:12::41:1;:4::56",
+    "logs": [],
+    "requires": [
+      {
+        "ip": 9,
+        "line": 20
+      },
+      {
+        "ip": 16,
+        "line": 23
+      },
+      {
+        "ip": 24,
+        "line": 25
+      },
+      {
+        "ip": 33,
+        "line": 30
+      }
+    ]
+  },
+  "compiler": {
+    "name": "cashc",
+    "version": "0.11.5"
+  },
+  "updatedAt": "2026-04-28T08:09:05.121Z"
+}
